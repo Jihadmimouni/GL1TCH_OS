@@ -21,6 +21,7 @@ puts:
     or al, al ;is it zero?
     jz .done ;if so, we are done
     mov ah, 0x0e ;otherwise, print it
+    mov bh, 0x00 ;page number
     int 0x10
     jmp .loop ;and repeat
 .done:
