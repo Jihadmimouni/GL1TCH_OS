@@ -30,7 +30,7 @@ We believe in the power of open collaboration. If you're passionate about operat
 
 We welcome contributions from developers of all skill levels. Whether you're an experienced developer or just starting, your ideas and contributions are valuable to us. To contribute, follow these steps:
 
-1. Check the [Issues](link_to_issues) section for tasks and bugs you can work on.
+1. Check the [Issues]([link_to_issues](https://github.com/Jihadmimouni/GL1TCH_OS/issues)) section for tasks and bugs you can work on.
 2. Fork the repository and create a new branch for your contribution.
 3. Make your changes, following the coding guidelines and best practices.
 4. Test your changes thoroughly.
