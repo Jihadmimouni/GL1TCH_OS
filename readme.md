@@ -1,6 +1,6 @@
 # Welcome to GL1TCH OS
 
-![GL1TCH OS Logo](link_to_logo.png)
+
 
 GL1TCH OS is an exciting project in early development aimed at creating an operating system that's both innovative and educational. This project is open for contributions from the community and is designed to be a fantastic learning opportunity for developers and enthusiasts interested in operating systems, low-level programming, and system architecture.
 
