@@ -41,8 +41,7 @@ We welcome contributions from developers of all skill levels. Whether you're an 
 To kickstart your journey with GL1TCH OS development, we recommend checking out the following resources:
 
 - [YouTube Playlist](https://www.youtube.com/playlist?list=PLFjM7v6KGMpiH2G-kT781ByCNC_0pKpPN): This playlist is a cornerstone of our project, providing valuable insights into OS development.
-- [Documentation](link_to_documentation): Our documentation hub where you can find guides, tutorials, and more.
-- [Issue Tracker](link_to_issues): Browse or raise issues, discuss ideas, and report bugs here.
+- [Documentation(still not created)](link_to_documentation): Our documentation hub where you can find guides, tutorials, and more.
 
 Let's come together and create something truly exceptional. Join us in shaping the future of GL1TCH OS!
 
