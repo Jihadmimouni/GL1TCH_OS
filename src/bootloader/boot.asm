@@ -1,7 +1,8 @@
+
 org 0x7c00
 bits 16
 
-%define ENDL 0x0D,0x0A ;end of line
+%define ENDL 0x0D,0x0A     ;end of line
 
 start:
     
@@ -49,7 +50,7 @@ main:
 .halt:
     jmp .halt
 
-msg_hello: db 'Hello, World!',ENDL, 0
+msg_hello: db 'Hello, World! ',ENDL, 0
 
 
 times 510 - ($ - $$) db 0
