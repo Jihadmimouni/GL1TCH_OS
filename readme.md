@@ -1,6 +1,6 @@
 # Welcome to GL1TCH OS
 
-![GL1TCH OS Logo](link_to_logo.png)
+
 
 GL1TCH OS is an exciting project in early development aimed at creating an operating system that's both innovative and educational. This project is open for contributions from the community and is designed to be a fantastic learning opportunity for developers and enthusiasts interested in operating systems, low-level programming, and system architecture.
 
@@ -30,7 +30,7 @@ We believe in the power of open collaboration. If you're passionate about operat
 
 We welcome contributions from developers of all skill levels. Whether you're an experienced developer or just starting, your ideas and contributions are valuable to us. To contribute, follow these steps:
 
-1. Check the [Issues](link_to_issues) section for tasks and bugs you can work on.
+1. Check the [Issues](https://github.com/Jihadmimouni/GL1TCH_OS/issues) section for tasks and bugs you can work on.
 2. Fork the repository and create a new branch for your contribution.
 3. Make your changes, following the coding guidelines and best practices.
 4. Test your changes thoroughly.
@@ -41,8 +41,7 @@ We welcome contributions from developers of all skill levels. Whether you're an 
 To kickstart your journey with GL1TCH OS development, we recommend checking out the following resources:
 
 - [YouTube Playlist](https://www.youtube.com/playlist?list=PLFjM7v6KGMpiH2G-kT781ByCNC_0pKpPN): This playlist is a cornerstone of our project, providing valuable insights into OS development.
-- [Documentation](link_to_documentation): Our documentation hub where you can find guides, tutorials, and more.
-- [Issue Tracker](link_to_issues): Browse or raise issues, discuss ideas, and report bugs here.
+- [Documentation(still not created)](link_to_documentation): Our documentation hub where you can find guides, tutorials, and more.
 
 Let's come together and create something truly exceptional. Join us in shaping the future of GL1TCH OS!
 
