@@ -1,4 +1,3 @@
-
 org 0x7c00
 bits 16
 
@@ -50,7 +49,7 @@ main:
 .halt:
     jmp .halt
 
-msg_hello: db 'Hello, World! ',ENDL, 0
+msg_hello: db 'Hello, World!',ENDL, 0
 
 
 times 510 - ($ - $$) db 0
