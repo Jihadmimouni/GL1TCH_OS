@@ -21,12 +21,13 @@ $(BUILD_DIR)/main_floppy.img: files
 	dd if=$(BUILD_DIR)/stage1.bin of=$(BUILD_DIR)/main_floppy.img conv=notrunc
 	mcopy -i $(BUILD_DIR)/main_floppy.img $(BUILD_DIR)/stage2.bin "::stage2.bin"
 	mcopy -i $(BUILD_DIR)/main_floppy.img $(BUILD_DIR)/kernel.bin "::kernel.bin"
+	mcopy -i $(BUILD_DIR)/main_floppy.img $(BUILD_DIR)/hello1.bin "::fat"
 
 #
 # Bootloader
 #
 
-files: kernel bootloader
+files: kernel bootloader tools
 
 
 
@@ -61,10 +62,10 @@ $(BUILD_DIR)/kernel.bin: always
 #
 # Tools
 #
-tools_fat: $(BUILD_DIR)/tools/fat
-$(BUILD_DIR)/tools/fat: always $(TOOLS_DIR)/fat/fat.c
-	mkdir -p $(BUILD_DIR)/tools
-	$(CC) -g -o $(BUILD_DIR)/tools/fat $(TOOLS_DIR)/fat/fat.c
+tools: $(BUILD_DIR)/fat.bin
+
+$(BUILD_DIR)/fat.bin: always
+	$(MAKE) -C $(TOOLS_DIR) BUILD_DIR=$(abspath $(BUILD_DIR))
 
 #
 # Always
