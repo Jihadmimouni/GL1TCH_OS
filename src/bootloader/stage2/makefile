@@ -1,5 +1,7 @@
 BUILD_DIR?=build
 ASM?=nasm
+CC16?=/usr/bin/watcom/binl64/wcc 
+LD16?=/usr/bin/watcom/binl64/wlink
 
 .PHONY: all stage2 clean
 
