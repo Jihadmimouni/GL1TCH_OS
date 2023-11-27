@@ -8,6 +8,8 @@ GL1TCH OS is an exciting project in early development aimed at creating an opera
 
 - [Project Overview](#project-overview)
 - [Getting Involved](#getting-involved)
+- [Requirments](#Requirments)
+- [usage](#Steps-to-Start)
 - [Contributing](#contributing)
 - [Resources](#resources)
 
