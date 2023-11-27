@@ -36,6 +36,7 @@ We believe in the power of open collaboration. If you're passionate about operat
 - **make:** Build automation tool. Install using your package manager (e.g., `sudo apt-get install make`).
 - **Bochs:** Debugger and emulator. Optional for debugging purposes. Install from [Bochs website](https://bochs.sourceforge.io/).
 - **File Editor:** Any text editor of your choice for code modifications.
+- **WCC** (Watcom C Compiler): C compiler for compiling the kernel as it supports the 16-bit mode. Install from [WCC repository](https://github.com/open-watcom/open-watcom-v2).
 
 ## Steps to Start:
 1. **Install Requirements:**
