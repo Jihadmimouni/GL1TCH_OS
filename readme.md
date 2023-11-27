@@ -26,6 +26,40 @@ We believe in the power of open collaboration. If you're passionate about operat
 - **Discuss:** Join discussions on GitHub issues to share your ideas and feedback.
 - **Spread the Word:** Share the project with others who might be interested.
 
+## Requirements:
+- **Linux OS:** All scripts are written in Bash, so a Linux environment is required.
+- **Qemu:** Virtualization software. Download from [Qemu website](https://www.qemu.org/download/).
+- **NASM:** Assembly compiler. Install from [NASM website](https://www.nasm.us/).
+- **mtools:** Tool for manipulating the floppy disk (used in the early stages). Install from [mtools website](https://www.gnu.org/software/mtools/).
+- **make:** Build automation tool. Install using your package manager (e.g., `sudo apt-get install make`).
+- **Bochs:** Debugger and emulator. Optional for debugging purposes. Install from [Bochs website](https://bochs.sourceforge.io/).
+- **File Editor:** Any text editor of your choice for code modifications.
+
+## Steps to Start:
+1. **Install Requirements:**
+   - Ensure that you have a Linux environment.
+   - Install Qemu, NASM, mtools, make, and Bochs using the provided links or your package manager.
+
+2. **Build the Project:**
+   - Run the `make` command in the project directory to build the project.
+
+3. **Set Execution Permissions:**
+   - Execute `chmod +x run.sh` to grant execution permissions to the `run.sh` script.
+
+4. **Execute the Project:**
+   - Run the project using `./run.sh`.
+
+5. **Debug with Bochs (Optional):**
+- If you want to debug the project using Bochs, run the appropriate Bochs command with your configuration. For example:
+  `
+  bochs -f bochsrc.txt
+  `
+  or by just using the default config and runing `./debug.sh` 
+                                                         
+                                                     
+- Note: Bochs is optional and can be used for debugging purposes. If not needed, you can skip this step.
+
+
 ## Contributing
 
 We welcome contributions from developers of all skill levels. Whether you're an experienced developer or just starting, your ideas and contributions are valuable to us. To contribute, follow these steps:

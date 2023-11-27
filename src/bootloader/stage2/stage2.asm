@@ -42,4 +42,4 @@ puts:
     pop si    
     ret
 
-msg_hello: db 'Load complete executing shell Code ', ENDL, 0
+msg_hello: db 'Load complete stage 2 working ', ENDL, 0
