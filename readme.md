@@ -10,6 +10,7 @@ GL1TCH OS is an exciting project in early development aimed at creating an opera
 - [Getting Involved](#getting-involved)
 - [Requirments](#Requirements)
 - [usage](#Steps-to-Start)
+- [Docker](#docker)
 - [Contributing](#contributing)
 - [Resources](#resources)
 
@@ -62,6 +63,27 @@ We believe in the power of open collaboration. If you're passionate about operat
                                                      
 - Note: Bochs is optional and can be used for debugging purposes. If not needed, you can skip this step.
 
+
+## Docker
+
+No local toolchain? Build and run GL1TCH OS with just Docker - it installs NASM, Open Watcom, mtools/dosfstools and builds `build/main_floppy.img` inside the container, so the build is reproducible on any machine that has Docker.
+
+1. **Build the image:**
+   ```
+   docker build -t gl1tch-os .
+   ```
+
+2. **Run it** (boots straight into QEMU, with the OS's text output shown right in your terminal via QEMU's curses display):
+   ```
+   docker run --rm -it gl1tch-os
+   ```
+
+3. **Extract just the built floppy image** (e.g. to run it yourself with `qemu-system-i386 -fda main_floppy.img` or Bochs):
+   ```
+   id=$(docker create gl1tch-os)
+   docker cp "$id":/os/main_floppy.img ./main_floppy.img
+   docker rm "$id"
+   ```
 
 ## Contributing
 
