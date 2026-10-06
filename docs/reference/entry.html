@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GL1TCH OS reference: entry / kmain</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+
+<header class="banner">
+  <div class="inner">
+    <nav class="crumbs screen-only"><a href="../index.html">docs</a> / <a href="index.html">code reference</a> / entry / kmain</nav>
+    <h1>entry / kmain</h1>
+    <div class="meta"><span>Boot handoff into C, and the kernel's main entry point</span></div>
+  </div>
+</header>
+
+<div class="page">
+
+  <nav class="modulebar screen-only">
+    <a href="index.html">Overview</a>
+    <a href="x86.html">x86</a>
+    <a href="kstring.html">kstring</a>
+    <a href="console.html">console</a>
+    <a href="keyboard.html">keyboard</a>
+    <a href="calc.html">calc</a>
+    <a href="fat.html">fat</a>
+    <a href="shell.html">shell</a>
+    <span class="current">entry / kmain</span>
+    <a href="../architecture.html">Architecture &#8599;</a>
+  </nav>
+
+  <p class="definedin">Defined in: src/kernel/entry.asm, src/kernel/kernel.c</p>
+
+  <p>Together these two files are the whole boot-to-shell handoff: one assembly label stage2 jumps to, and one C function it calls.</p>
+
+  <h2>Function summary</h2>
+  <table class="summary">
+    <tr><th>Function</th><th>Description</th></tr>
+    <tr><td><a href="#fn_entry">entry</a> <span class="internal-marker">(asm label)</span></td><td>The kernel's actual load-time entry point.</td></tr>
+    <tr><td><a href="#fn_kmain">void kmain(uint16_t boot_drive)</a></td><td>The C side of the handoff.</td></tr>
+  </table>
+
+  <h2>Function detail</h2>
+
+  <section class="fndetail" id="fn_entry">
+    <h3>entry <span class="internal-marker">(assembly label, src/kernel/entry.asm)</span></h3>
+    <p>
+      What stage2 jumps to after loading <code>KERNEL.BIN</code>. Sets
+      <code>ds</code>/<code>es</code>/<code>ss</code> to <code>cs</code> &mdash; the
+      kernel's single 64&nbsp;KB segment, where code, data and stack all live together
+      &mdash; and the stack pointer to near the top of that segment, then calls
+      <a href="#fn_kmain">kmain(boot_drive)</a> with the boot drive number stage2 left
+      in <code>dl</code>. If <code>kmain</code> ever returned (it doesn't, since
+      <a href="shell.html#fn_run">shell_run</a> never returns either), execution falls
+      into an infinite <code>cli; hlt</code> loop rather than running off the end of the
+      binary into whatever garbage follows.
+    </p>
+    <dl class="params">
+      <dt>dl</dt><dd>(register, not a C parameter) Boot drive number, as left by stage2.</dd>
+      <dt class="ret">Returns</dt><dd>Never returns.</dd>
+    </dl>
+  </section>
+
+  <section class="fndetail" id="fn_kmain">
+    <h3>void kmain(uint16_t boot_drive)</h3>
+    <p>
+      The C side of the handoff, and the only function in <code>kernel.c</code>. Clears
+      the screen, prints the banner, calls
+      <a href="fat.html#fn_init">fat_init((uint8_t)boot_drive)</a> &mdash; printing a
+      warning rather than halting if it fails, so the shell still starts even without a
+      working filesystem &mdash; then calls <a href="shell.html#fn_run">shell_run()</a>.
+    </p>
+    <dl class="params">
+      <dt>boot_drive</dt><dd>BIOS boot drive number, passed in from <code>entry</code>'s argument push.</dd>
+      <dt class="ret">Returns</dt><dd>Never returns (shell_run doesn't return; kmain has a defensive halt loop after it as a backstop).</dd>
+    </dl>
+  </section>
+
+  <footer class="pagefoot">
+    GL1TCH OS &mdash; <a href="../index.html">docs</a> &middot; <a href="index.html">code reference</a>
+  </footer>
+
+</div>
+</body>
+</html>

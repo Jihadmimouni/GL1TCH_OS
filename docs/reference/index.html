@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GL1TCH OS code reference</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+
+<header class="banner">
+  <div class="inner">
+    <nav class="crumbs screen-only"><a href="../index.html">docs</a> / code reference</nav>
+    <h1>GL1TCH OS &mdash; code reference</h1>
+    <div class="meta"><span>Every function in <code>src/kernel/</code>, one page per module</span></div>
+  </div>
+</header>
+
+<div class="page">
+
+  <nav class="modulebar screen-only">
+    <span class="current">Overview</span>
+    <a href="x86.html">x86</a>
+    <a href="kstring.html">kstring</a>
+    <a href="console.html">console</a>
+    <a href="keyboard.html">keyboard</a>
+    <a href="calc.html">calc</a>
+    <a href="fat.html">fat</a>
+    <a href="shell.html">shell</a>
+    <a href="entry.html">entry / kmain</a>
+    <a href="../architecture.html">Architecture &#8599;</a>
+  </nav>
+
+  <p>
+    Each module has its own page: a function summary table, then full detail for every
+    public function (parameters, return value, and why it's shaped the way it is), plus
+    a short note on any internal helpers worth knowing about. For <em>how the modules
+    fit together</em> rather than what each function does, see
+    <a href="../architecture.html">architecture.html</a> &mdash; this index is the
+    function-level companion to that page.
+  </p>
+
+  <p>Listed bottom of the dependency graph first:</p>
+
+  <div class="modgrid">
+    <div class="mod">
+      <a href="x86.html">x86</a> &mdash; src/kernel/x86.asm, x86.h
+      <p>BIOS calls (console, keyboard, disk) and the 32-bit math runtime helpers Open Watcom's codegen calls into. The only module that touches real hardware.</p>
+    </div>
+    <div class="mod">
+      <a href="kstring.html">kstring</a> &mdash; src/kernel/kstring.c, kstring.h
+      <p>Freestanding string/number helpers with no dependencies on anything else here. Named to avoid colliding with Watcom's memcpy/strlen compiler intrinsics.</p>
+    </div>
+    <div class="mod">
+      <a href="console.html">console</a> &mdash; src/kernel/console.c, console.h
+      <p>Character and number output, built on x86's BIOS teletype call.</p>
+    </div>
+    <div class="mod">
+      <a href="keyboard.html">keyboard</a> &mdash; src/kernel/keyboard.c, keyboard.h
+      <p>Line-buffered keyboard input with backspace support, built on x86's BIOS key read.</p>
+    </div>
+    <div class="mod">
+      <a href="calc.html">calc</a> &mdash; src/kernel/calc.c, calc.h
+      <p>A standalone recursive-descent arithmetic expression evaluator. The <code>calc</code> shell command.</p>
+    </div>
+    <div class="mod">
+      <a href="fat.html">fat</a> &mdash; src/kernel/fat.c, fat.h
+      <p>The FAT12 filesystem driver: BPB parsing, directory iteration, path resolution, file reads. Backs <code>ls</code>/<code>cd</code>/<code>pwd</code>/<code>cat</code>.</p>
+    </div>
+    <div class="mod">
+      <a href="shell.html">shell</a> &mdash; src/kernel/shell.c, shell.h
+      <p>The interactive command loop. Depends on every other module; intentionally has almost no logic of its own.</p>
+    </div>
+    <div class="mod">
+      <a href="entry.html">entry / kmain</a> &mdash; src/kernel/entry.asm, kernel.c
+      <p>The boot handoff from stage2 into C, and <code>kmain</code>, which wires everything above together.</p>
+    </div>
+  </div>
+
+  <h2>Adding a module's page</h2>
+  <p>
+    Copy <code>docs/reference/_module-template.html</code>, fill it in, and add it to
+    both the grid above and the <code>nav.modulebar</code> list that's repeated at the
+    top of every page in this folder (see the template's own header comment for the
+    full checklist).
+  </p>
+
+  <footer class="pagefoot">
+    GL1TCH OS &mdash; <a href="../index.html">back to docs index</a>
+  </footer>
+
+</div>
+</body>
+</html>

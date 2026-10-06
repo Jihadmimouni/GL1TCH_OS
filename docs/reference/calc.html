@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GL1TCH OS reference: calc</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+
+<header class="banner">
+  <div class="inner">
+    <nav class="crumbs screen-only"><a href="../index.html">docs</a> / <a href="index.html">code reference</a> / calc</nav>
+    <h1>calc</h1>
+    <div class="meta"><span>Arithmetic expression evaluator</span></div>
+  </div>
+</header>
+
+<div class="page">
+
+  <nav class="modulebar screen-only">
+    <a href="index.html">Overview</a>
+    <a href="x86.html">x86</a>
+    <a href="kstring.html">kstring</a>
+    <a href="console.html">console</a>
+    <a href="keyboard.html">keyboard</a>
+    <span class="current">calc</span>
+    <a href="fat.html">fat</a>
+    <a href="shell.html">shell</a>
+    <a href="entry.html">entry / kmain</a>
+    <a href="../architecture.html">Architecture &#8599;</a>
+  </nav>
+
+  <p class="definedin">Defined in: src/kernel/calc.c, src/kernel/calc.h</p>
+
+  <p>
+    Depends only on <a href="kstring.html">kstring.h</a>. A standalone recursive-descent
+    evaluator with no knowledge of the console or the shell, which is what makes it
+    independently testable on its own. Grammar:
+  </p>
+  <pre><code>expr   := term (('+' | '-') term)*
+term   := factor (('*' | '/') factor)*
+factor := ('+' | '-') factor | '(' expr ')' | number</code></pre>
+  <p>
+    Standard operator precedence, right down to unary minus binding to a
+    <code>factor</code> &mdash; so <code>-2*3</code> parses as <code>(-2)*3</code>, not
+    <code>-(2*3)</code> (same numeric answer either way here, but it's the structure
+    you'd want if a right-associative operator like exponentiation were ever added).
+  </p>
+
+  <h2>Function summary</h2>
+  <table class="summary">
+    <tr><th>Function</th><th>Description</th></tr>
+    <tr><td><a href="#fn_eval">int calc_eval(const char *expr, int32_t *out, const char **err_msg)</a></td><td>Evaluate an arithmetic expression.</td></tr>
+  </table>
+
+  <h2>Function detail</h2>
+
+  <section class="fndetail" id="fn_eval">
+    <h3>int calc_eval(const char *expr, int32_t *out, const char **err_msg)</h3>
+    <p>
+      The only public entry point; everything else in <code>calc.c</code> is
+      <code>static</code>. Resets three file-scope parser globals (the cursor and the
+      error flag/message) before parsing &mdash; the grammar is a straight-line
+      recursive descent with no backtracking, so a simple error flag that short-circuits
+      the remaining parse is enough. There is no error recovery or multiple-error
+      reporting: the first problem found wins.
+    </p>
+    <dl class="params">
+      <dt>expr</dt><dd>NUL-terminated expression, e.g. <code>"2 + 3 * 4"</code>. Leading/trailing/interior whitespace around tokens is allowed.</dd>
+      <dt>out</dt><dd>Out: the result, only written on success.</dd>
+      <dt>err_msg</dt><dd>Out: on failure, set to a short static string &mdash; one of <code>"division by zero"</code>, <code>"missing closing parenthesis"</code>, <code>"invalid number"</code>, <code>"expected a number or '('"</code>, or <code>"unexpected trailing characters"</code>. May be passed as <code>NULL</code> if the caller doesn't need it.</dd>
+      <dt class="ret">Returns</dt><dd>1 on success with <code>*out</code> set; 0 on failure with <code>*err_msg</code> set.</dd>
+    </dl>
+  </section>
+
+  <h2>Internal helpers</h2>
+  <p>
+    <code>static int32_t parse_expr/parse_term/parse_factor(void)</code> &mdash; one
+    function per grammar rule above, each consuming from the shared cursor and
+    <em>looping</em> (not recursing) for the repeated <code>(op term)*</code> parts, so a
+    long chain like <code>1+2+3+4</code> doesn't grow the call stack at all.
+    <code>skip_ws()</code> is called at every point whitespace may legally appear
+    between tokens.
+  </p>
+
+  <footer class="pagefoot">
+    GL1TCH OS &mdash; <a href="../index.html">docs</a> &middot; <a href="index.html">code reference</a>
+  </footer>
+
+</div>
+</body>
+</html>

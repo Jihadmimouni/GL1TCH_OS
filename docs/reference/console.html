@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GL1TCH OS reference: console</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+
+<header class="banner">
+  <div class="inner">
+    <nav class="crumbs screen-only"><a href="../index.html">docs</a> / <a href="index.html">code reference</a> / console</nav>
+    <h1>console</h1>
+    <div class="meta"><span>Character and number output</span></div>
+  </div>
+</header>
+
+<div class="page">
+
+  <nav class="modulebar screen-only">
+    <a href="index.html">Overview</a>
+    <a href="x86.html">x86</a>
+    <a href="kstring.html">kstring</a>
+    <span class="current">console</span>
+    <a href="keyboard.html">keyboard</a>
+    <a href="calc.html">calc</a>
+    <a href="fat.html">fat</a>
+    <a href="shell.html">shell</a>
+    <a href="entry.html">entry / kmain</a>
+    <a href="../architecture.html">Architecture &#8599;</a>
+  </nav>
+
+  <p class="definedin">Defined in: src/kernel/console.c, src/kernel/console.h</p>
+
+  <p>Depends only on <a href="x86.html">x86.h</a>. Turns characters and numbers into BIOS teletype calls.</p>
+
+  <h2>Function summary</h2>
+  <table class="summary">
+    <tr><th>Function</th><th>Description</th></tr>
+    <tr><td><a href="#fn_putc">void con_putc(char c)</a></td><td>Write one character.</td></tr>
+    <tr><td><a href="#fn_puts">void con_puts(const char *s)</a></td><td>Write a NUL-terminated string.</td></tr>
+    <tr><td><a href="#fn_u32">void con_print_u32(uint32_t v, uint8_t base)</a></td><td>Write an unsigned integer in a given base.</td></tr>
+    <tr><td><a href="#fn_i32">void con_print_i32(int32_t v)</a></td><td>Write a signed decimal integer.</td></tr>
+  </table>
+
+  <h2>Function detail</h2>
+
+  <section class="fndetail" id="fn_putc">
+    <h3>void con_putc(char c)</h3>
+    <p>
+      A thin pass-through to <a href="x86.html#fn_putc">x86_putc</a>. Kept as its own
+      call &mdash; rather than every module calling <code>x86_putc</code> directly
+      &mdash; so any future console-level behavior (e.g. line-ending translation) has
+      exactly one place to live.
+    </p>
+    <dl class="params"><dt>c</dt><dd>Character to write.</dd><dt class="ret">Returns</dt><dd>Nothing.</dd></dl>
+  </section>
+
+  <section class="fndetail" id="fn_puts">
+    <h3>void con_puts(const char *s)</h3>
+    <p>Writes a NUL-terminated string one character at a time. Does no newline translation &mdash; every string literal printed by the shell already embeds <code>\r\n</code> explicitly where needed.</p>
+    <dl class="params"><dt>s</dt><dd>NUL-terminated string.</dd><dt class="ret">Returns</dt><dd>Nothing.</dd></dl>
+  </section>
+
+  <section class="fndetail" id="fn_u32">
+    <h3>void con_print_u32(uint32_t v, uint8_t base)</h3>
+    <p>Formats into a small stack buffer via <a href="kstring.html#fn_u32tostr">u32_to_str</a>, then <a href="#fn_puts">con_puts</a>s it.</p>
+    <dl class="params">
+      <dt>v</dt><dd>Value to print.</dd>
+      <dt>base</dt><dd>Radix (10 or 16 in practice).</dd>
+      <dt class="ret">Returns</dt><dd>Nothing.</dd>
+    </dl>
+  </section>
+
+  <section class="fndetail" id="fn_i32">
+    <h3>void con_print_i32(int32_t v)</h3>
+    <p>
+      Formats via <a href="kstring.html#fn_i32tostr">i32_to_str</a>, then
+      <a href="#fn_puts">con_puts</a>s it. Used by <code>calc</code>'s result.
+    </p>
+    <p>
+      There is deliberately no variadic <code>con_printf</code>: on this 16-bit target
+      <code>int</code> is 16 bits but <code>int32_t</code> is 32, and a hand-rolled
+      varargs reader has no prototype to promote a call-site literal/variable to the
+      width the format string expects &mdash; a mismatched call would silently misread
+      the stack. Explicit, typed print functions like this one avoid that whole class
+      of bug.
+    </p>
+    <dl class="params"><dt>v</dt><dd>Value to print.</dd><dt class="ret">Returns</dt><dd>Nothing.</dd></dl>
+  </section>
+
+  <footer class="pagefoot">
+    GL1TCH OS &mdash; <a href="../index.html">docs</a> &middot; <a href="index.html">code reference</a>
+  </footer>
+
+</div>
+</body>
+</html>

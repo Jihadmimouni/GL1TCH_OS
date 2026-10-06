@@ -1,0 +1,103 @@
+<!--
+  GL1TCH OS code reference - module page template
+  =================================================
+  How to document a new module (e.g. after adding src/kernel/foo.c + foo.h):
+
+    1. Copy this file:  cp docs/reference/_module-template.html docs/reference/foo.html
+    2. Fill in every <!-- FILL: ... --> placeholder (then delete the comment markers).
+    3. One row in the Function Summary table per PUBLIC function (declared in the
+       .h file), each linking to a matching #fn_<name> anchor below it.
+    4. One .fndetail block per public function: full description, a dl.params list
+       of every parameter plus a "Returns" entry, and any caller/caveat notes.
+    5. If the module has internal (static) helpers worth knowing about, list them
+       tersely under "Internal helpers" - name + one or two sentences is enough,
+       no full param/returns treatment (they have no external contract to document).
+    6. Add this module to the grid in docs/reference/index.html, AND to the
+       nav.modulebar list on *every* existing reference page (the nav bar is
+       duplicated per-page by design - like Javadoc's fixed top links - so it only
+       needs editing when the set of modules changes, not when a module's content
+       does).
+    7. Cross-link from docs/architecture.html if this module changes the module
+       dependency graph described there.
+
+  Keep each module's prose focused on WHY it's shaped the way it is, not just a
+  restatement of the signature - the signature already says what types go in and
+  out.
+-->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GL1TCH OS reference: <!-- FILL: module name, e.g. "fat" --></title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+
+<header class="banner">
+  <div class="inner">
+    <nav class="crumbs screen-only"><a href="../index.html">docs</a> / <a href="index.html">code reference</a> / <!-- FILL: module name --></nav>
+    <h1><!-- FILL: module name --></h1>
+    <div class="meta"><span><!-- FILL: one-sentence role, e.g. "FAT12 filesystem driver" --></span></div>
+  </div>
+</header>
+
+<div class="page">
+
+  <!-- Keep this nav identical across every docs/reference/*.html page; only add/remove a
+       link when a module is added/removed entirely. Mark the current page's link with
+       class="current" instead of href. -->
+  <nav class="modulebar screen-only">
+    <a href="index.html">Overview</a>
+    <a href="x86.html">x86</a>
+    <a href="kstring.html">kstring</a>
+    <a href="console.html">console</a>
+    <a href="keyboard.html">keyboard</a>
+    <a href="calc.html">calc</a>
+    <a href="fat.html">fat</a>
+    <a href="shell.html">shell</a>
+    <a href="entry.html">entry / kmain</a>
+    <a href="../architecture.html">Architecture &#8599;</a>
+  </nav>
+
+  <p class="definedin">Defined in: <!-- FILL: e.g. src/kernel/foo.c, src/kernel/foo.h --></p>
+
+  <p><!-- FILL: 2-4 sentences: what this module owns, and what it depends on (name the
+     other modules explicitly, e.g. "depends only on kstring.h" or "the only module
+     that touches hardware directly") --></p>
+
+  <h2>Function summary</h2>
+  <table class="summary">
+    <tr><th>Function</th><th>Description</th></tr>
+    <tr>
+      <td><a href="#fn_example"><!-- FILL: return_type name(params) --></a></td>
+      <td><!-- FILL: one line --></td>
+    </tr>
+  </table>
+
+  <h2>Function detail</h2>
+
+  <section class="fndetail" id="fn_example">
+    <h3><!-- FILL: return_type name(params) --></h3>
+    <p><!-- FILL: full description - what it does, and why it's built this way --></p>
+    <dl class="params">
+      <dt><!-- FILL: param name --></dt>
+      <dd><!-- FILL: what it is / valid range / ownership --></dd>
+      <dt class="ret">Returns</dt>
+      <dd><!-- FILL --></dd>
+    </dl>
+  </section>
+
+  <h2>Internal helpers</h2>
+  <p>
+    <code><!-- FILL: static_helper_name --></code> &mdash;
+    <!-- FILL: one or two sentences; no params/returns list needed -->
+  </p>
+
+  <footer class="pagefoot">
+    GL1TCH OS &mdash; <a href="../index.html">docs</a> &middot; <a href="index.html">code reference</a>
+  </footer>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GL1TCH OS reference: keyboard</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+
+<header class="banner">
+  <div class="inner">
+    <nav class="crumbs screen-only"><a href="../index.html">docs</a> / <a href="index.html">code reference</a> / keyboard</nav>
+    <h1>keyboard</h1>
+    <div class="meta"><span>Line-buffered keyboard input</span></div>
+  </div>
+</header>
+
+<div class="page">
+
+  <nav class="modulebar screen-only">
+    <a href="index.html">Overview</a>
+    <a href="x86.html">x86</a>
+    <a href="kstring.html">kstring</a>
+    <a href="console.html">console</a>
+    <span class="current">keyboard</span>
+    <a href="calc.html">calc</a>
+    <a href="fat.html">fat</a>
+    <a href="shell.html">shell</a>
+    <a href="entry.html">entry / kmain</a>
+    <a href="../architecture.html">Architecture &#8599;</a>
+  </nav>
+
+  <p class="definedin">Defined in: src/kernel/keyboard.c, src/kernel/keyboard.h</p>
+
+  <p>Depends on <a href="x86.html">x86.h</a> (for key reads) and <a href="console.html">console.h</a> (to echo what's typed).</p>
+
+  <h2>Function summary</h2>
+  <table class="summary">
+    <tr><th>Function</th><th>Description</th></tr>
+    <tr><td><a href="#fn_readline">void read_line(char *buf, uint16_t max_len)</a></td><td>Read one line of input, with echo and backspace.</td></tr>
+  </table>
+
+  <h2>Function detail</h2>
+
+  <section class="fndetail" id="fn_readline">
+    <h3>void read_line(char *buf, uint16_t max_len)</h3>
+    <p>
+      Reads and echoes characters via <a href="x86.html#fn_getkey">x86_getkey</a> until
+      Enter (ASCII <code>0x0D</code>). Backspace (<code>0x08</code>) erases the last
+      character both in <code>buf</code> and on screen (by writing backspace, space,
+      backspace &mdash; which moves the cursor back, overwrites the glyph with a space,
+      then moves back again). Printable ASCII (<code>0x20</code>&ndash;<code>0x7E</code>)
+      is appended if there's room; once <code>max_len - 1</code> characters are buffered,
+      further typed characters are silently dropped (the line is truncated, not treated
+      as an error). Anything else &mdash; arrow keys, function keys, etc. &mdash; is
+      ignored outright.
+    </p>
+    <dl class="params">
+      <dt>buf</dt><dd>Destination buffer.</dd>
+      <dt>max_len</dt><dd>Size of <code>buf</code> in bytes, including room for the NUL terminator.</dd>
+      <dt class="ret">Returns</dt><dd>Nothing. On return, <code>buf</code> is always NUL-terminated, and a trailing <code>\r\n</code> has already been written to the console.</dd>
+    </dl>
+  </section>
+
+  <footer class="pagefoot">
+    GL1TCH OS &mdash; <a href="../index.html">docs</a> &middot; <a href="index.html">code reference</a>
+  </footer>
+
+</div>
+</body>
+</html>

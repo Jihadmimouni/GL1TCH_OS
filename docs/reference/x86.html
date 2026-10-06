@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GL1TCH OS reference: x86</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+
+<header class="banner">
+  <div class="inner">
+    <nav class="crumbs screen-only"><a href="../index.html">docs</a> / <a href="index.html">code reference</a> / x86</nav>
+    <h1>x86</h1>
+    <div class="meta"><span>BIOS calls and 32-bit math runtime helpers</span></div>
+  </div>
+</header>
+
+<div class="page">
+
+  <nav class="modulebar screen-only">
+    <a href="index.html">Overview</a>
+    <span class="current">x86</span>
+    <a href="kstring.html">kstring</a>
+    <a href="console.html">console</a>
+    <a href="keyboard.html">keyboard</a>
+    <a href="calc.html">calc</a>
+    <a href="fat.html">fat</a>
+    <a href="shell.html">shell</a>
+    <a href="entry.html">entry / kmain</a>
+    <a href="../architecture.html">Architecture &#8599;</a>
+  </nav>
+
+  <p class="definedin">Defined in: src/kernel/x86.asm, src/kernel/x86.h</p>
+
+  <p>
+    The only module that executes a BIOS interrupt or a raw CPU instruction &mdash;
+    everything else reaches hardware only through these cdecl wrappers, so there is
+    exactly one place to look when something at the BIOS boundary misbehaves. Every
+    function uses the <code>_cdecl</code> convention, which matters here because the
+    8086 <code>push</code> instruction can't push a single byte: even a
+    <code>uint8_t</code> argument occupies a full 16-bit stack slot, which is what lets
+    the fixed <code>[bp+N]</code> offsets in the assembly line up with C's argument
+    order.
+  </p>
+
+  <h2>Function summary</h2>
+  <table class="summary">
+    <tr><th>Function</th><th>Description</th></tr>
+    <tr><td><a href="#fn_putc">void x86_putc(char c)</a></td><td>Write one character via the BIOS teletype call.</td></tr>
+    <tr><td><a href="#fn_clear">void x86_clear_screen(void)</a></td><td>Set 80x25 text mode (clears the screen).</td></tr>
+    <tr><td><a href="#fn_getkey">uint16_t x86_getkey(void)</a></td><td>Block until a key is pressed.</td></tr>
+    <tr><td><a href="#fn_reboot">void x86_reboot(void)</a></td><td>Far-jump into the BIOS entry point.</td></tr>
+    <tr><td><a href="#fn_reset">int x86_disk_reset(uint8_t drive)</a></td><td>Reset the disk controller.</td></tr>
+    <tr><td><a href="#fn_params">int x86_disk_params(uint8_t drive, uint16_t *spt, uint16_t *heads)</a></td><td>Read the drive's real CHS geometry.</td></tr>
+    <tr><td><a href="#fn_io">int x86_disk_io(uint8_t op, uint8_t drive, uint16_t cyl, uint8_t head, uint8_t sector, void *buf)</a></td><td>Read or write one 512-byte sector at an explicit CHS address.</td></tr>
+  </table>
+
+  <h2>Function detail</h2>
+
+  <section class="fndetail" id="fn_putc">
+    <h3>void x86_putc(char c)</h3>
+    <p>
+      <code>ah=0x0E; al=c; bh=0 &rarr; int 10h</code> (BIOS teletype output).
+      Writes one character to the screen at the current cursor position and advances
+      the cursor. Does not translate <code>\n</code> to <code>\r\n</code> &mdash;
+      callers (<a href="console.html">console.c</a>) are expected to emit both when
+      they want a newline.
+    </p>
+    <dl class="params">
+      <dt>c</dt><dd>The character to write.</dd>
+      <dt class="ret">Returns</dt><dd>Nothing.</dd>
+    </dl>
+  </section>
+
+  <section class="fndetail" id="fn_clear">
+    <h3>void x86_clear_screen(void)</h3>
+    <p><code>ax=0x0003 &rarr; int 10h</code> &mdash; sets video mode 3 (80x25 text), which clears the screen as a side effect.</p>
+    <dl class="params"><dt class="ret">Returns</dt><dd>Nothing.</dd></dl>
+  </section>
+
+  <section class="fndetail" id="fn_getkey">
+    <h3>uint16_t x86_getkey(void)</h3>
+    <p><code>ah=0 &rarr; int 16h</code> &mdash; blocks until a key is pressed.</p>
+    <dl class="params">
+      <dt class="ret">Returns</dt>
+      <dd>The raw BIOS result: scan code in the high byte, ASCII in the low byte. <a href="keyboard.html">keyboard.c</a> only looks at the low byte.</dd>
+    </dl>
+  </section>
+
+  <section class="fndetail" id="fn_reboot">
+    <h3>void x86_reboot(void)</h3>
+    <p><code>jmp 0FFFFh:0</code> &mdash; a far jump straight into the BIOS entry point. Never returns.</p>
+  </section>
+
+  <section class="fndetail" id="fn_reset">
+    <h3>int x86_disk_reset(uint8_t drive)</h3>
+    <p><code>ah=0, dl=drive &rarr; int 13h</code>. Called before retrying a failed read, and once up front in <a href="fat.html#fn_init">fat_init</a>.</p>
+    <dl class="params">
+      <dt>drive</dt><dd>BIOS drive number (the boot drive, passed down from stage2).</dd>
+      <dt class="ret">Returns</dt><dd>1 on success, 0 on failure (BIOS carry flag set).</dd>
+    </dl>
+  </section>
+
+  <section class="fndetail" id="fn_params">
+    <h3>int x86_disk_params(uint8_t drive, uint16_t *sectors_per_track, uint16_t *heads)</h3>
+    <p>
+      <code>ah=8h, dl=drive, es:di=0:0 &rarr; int 13h</code>. Asks the BIOS for the
+      drive's actual geometry rather than trusting a hardcoded value; <code>es:di</code>
+      is zeroed first as a defensive workaround for BIOSes that read the floppy
+      parameter table through it even though this call shouldn't need it.
+    </p>
+    <dl class="params">
+      <dt>drive</dt><dd>BIOS drive number.</dd>
+      <dt>sectors_per_track</dt><dd>Out: filled with the reported sectors/track.</dd>
+      <dt>heads</dt><dd>Out: filled with the reported head count.</dd>
+      <dt class="ret">Returns</dt><dd>1 on success, 0 on failure.</dd>
+    </dl>
+  </section>
+
+  <section class="fndetail" id="fn_io">
+    <h3>int x86_disk_io(uint8_t op, uint8_t drive, uint16_t cylinder, uint8_t head, uint8_t sector, void *buffer)</h3>
+    <p>
+      <code>ah=op (02h read / 03h write), al=1, es:bx=ds:buffer &rarr; int 13h</code>.
+      Reads or writes exactly one 512-byte sector at an explicit CHS address, in one
+      attempt. <a href="fat.html">fat.c</a> owns the LBA&rarr;CHS conversion and the
+      retry-on-failure loop; this function just does the one BIOS call and reports
+      whether it worked.
+    </p>
+    <dl class="params">
+      <dt>op</dt><dd><code>0x02</code> to read, <code>0x03</code> to write.</dd>
+      <dt>drive</dt><dd>BIOS drive number.</dd>
+      <dt>cylinder</dt><dd>0-based cylinder number.</dd>
+      <dt>head</dt><dd>0-based head number.</dd>
+      <dt>sector</dt><dd>1-based sector number (CHS sectors are 1-indexed, unlike LBA).</dd>
+      <dt>buffer</dt><dd>Pointer to a 512-byte buffer in the kernel's own segment (passed as <code>es:bx</code> with <code>es</code> set to <code>ds</code>).</dd>
+      <dt class="ret">Returns</dt><dd>1 on success, 0 on failure.</dd>
+    </dl>
+  </section>
+
+  <h2>Internal helpers</h2>
+  <p>
+    <code>__U4M</code> / <code>__I4M</code> / <code>__U4D</code> / <code>__I4D</code>
+    &mdash; not called directly; Open Watcom's 16-bit codegen emits calls to these exact
+    names for any <code>uint32_t</code>/<code>int32_t</code> multiply or divide, since
+    the build links no default runtime library (<code>NODEFAULTLIBS</code> in
+    <code>linker.lnk</code>) that would normally provide them. Convention: operand 1 in
+    <code>dx:ax</code>, operand 2 in <code>cx:bx</code>, result in <code>dx:ax</code>
+    (plus <code>cx:bx</code> for the divide's remainder). <code>__U4M</code>/<code>__I4M</code>
+    share one implementation &mdash; the low 32 bits of a multiply are the same whether
+    the operands are signed or unsigned &mdash; while <code>__U4D</code>/<code>__I4D</code>
+    differ only in whether the dividend is sign-extended (<code>cdq</code>) before dividing.
+  </p>
+
+  <footer class="pagefoot">
+    GL1TCH OS &mdash; <a href="../index.html">docs</a> &middot; <a href="index.html">code reference</a>
+  </footer>
+
+</div>
+</body>
+</html>
