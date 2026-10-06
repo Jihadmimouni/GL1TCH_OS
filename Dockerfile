@@ -1,10 +1,18 @@
-# syntax=docker/dockerfile:1
+# syntax pinned by digest (see "Updating the pinned base image" below for why,
+# and how to intentionally refresh this).
+# syntax=docker/dockerfile:1@sha256:4edf897a3ffa55b89f906fc8cc78afdb3f1834cc9c7083565e611a8a7d5fe99e
 
 ########################################################################
 # Stage 1: build toolchain (NASM, GCC, Open Watcom, mtools/dosfstools)
 # and produce build/main_floppy.img
 ########################################################################
-FROM ubuntu:24.04 AS builder
+# Pinned by digest, not just ":24.04" - a floating tag makes BuildKit
+# contact the registry to re-resolve it on *every* build (a small metadata
+# call, but still network access, even when every layer is already cached
+# and nothing changed). A digest is immutable, so BuildKit can match it
+# against the local image store and skip the network entirely. See
+# "Updating the pinned base image" below.
+FROM ubuntu:24.04@sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884ff530eb55 AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
@@ -50,7 +58,8 @@ RUN make
 # Stage 2: minimal runtime image - just QEMU and the built floppy image,
 # so the produced image can be run directly with `docker run`.
 ########################################################################
-FROM ubuntu:24.04 AS runtime
+# Same pinned digest as the builder stage - same reasoning.
+FROM ubuntu:24.04@sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884ff530eb55 AS runtime
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         qemu-system-x86 \
@@ -69,3 +78,19 @@ USER gl1tch
 # display available and want graphics instead.
 ENTRYPOINT ["qemu-system-i386", "-drive", "file=/os/main_floppy.img,format=raw,if=floppy"]
 CMD ["-display", "curses"]
+
+########################################################################
+# Updating the pinned base image
+#
+# `docker build -t gl1tch-os .` makes NO network calls once the image
+# above is cached locally - that's the point of pinning by digest instead
+# of a floating tag. To intentionally pick up a newer ubuntu:24.04 (and
+# accept that one-time network cost), run:
+#
+#   docker pull ubuntu:24.04
+#   docker image inspect ubuntu:24.04 --format '{{index .RepoDigests 0}}'
+#
+# then replace the sha256:... value on both FROM lines above (and the
+# docker/dockerfile:1 syntax line, if you want the latest Dockerfile
+# frontend too - same idea, just `docker pull docker/dockerfile:1` first).
+########################################################################
