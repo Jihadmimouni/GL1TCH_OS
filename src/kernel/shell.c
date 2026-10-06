@@ -116,6 +116,8 @@ static void _cdecl cmd_help(void) {
     con_puts("  echo <text>     print text back\r\n");
     con_puts("  clear           clear the screen\r\n");
     con_puts("  reboot          reboot the machine\r\n");
+    con_puts("  version         print the OS version\r\n");
+    con_puts("  rahma           print a special message\r\n");
 }
 
 /* Splits line in place on spaces into argv (argv[0] is the command). */
@@ -203,11 +205,10 @@ void _cdecl shell_run(void) {
             x86_clear_screen();
         } else if (str_cmp(argv[0], "reboot") == 0) {
             x86_reboot();
+        } else if (str_cmp(argv[0], "version") == 0) {
+            con_puts("GL1TCH OS v1.0\r\n");
         } else if (str_cmp(argv[0], "rahma") == 0) {
             con_puts("Rahma is the best <3 <3 <3!\r\n");
-        }else if (str_cmp(argv[0], "exit") == 0) {
-            con_puts("Exiting shell.\r\n");
-            break;
         } else {
             con_puts("Unknown command: ");
             con_puts(argv[0]);
