@@ -203,6 +203,11 @@ void _cdecl shell_run(void) {
             x86_clear_screen();
         } else if (str_cmp(argv[0], "reboot") == 0) {
             x86_reboot();
+        } else if (str_cmp(argv[0], "rahma") == 0) {
+            con_puts("Rahma is the best <3 <3 <3!\r\n");
+        }else if (str_cmp(argv[0], "exit") == 0) {
+            con_puts("Exiting shell.\r\n");
+            break;
         } else {
             con_puts("Unknown command: ");
             con_puts(argv[0]);

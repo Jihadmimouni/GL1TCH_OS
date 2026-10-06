@@ -42,7 +42,7 @@ bootloader: stage1 stage2
 stage1: $(BUILD_DIR)/stage1.bin
 
 $(BUILD_DIR)/stage1.bin: always
-	$(MAKE) -C $(SRC_DIR)/bootloader/stage1 BUILD_DIR=$(abspath $(BUILD_DIR))	
+	$(MAKE) -C $(SRC_DIR)/bootloader/stage1 "BUILD_DIR=$(abspath $(BUILD_DIR))"
 
 
 
@@ -52,14 +52,14 @@ $(BUILD_DIR)/stage1.bin: always
 stage2: $(BUILD_DIR)/stage2.bin
 
 $(BUILD_DIR)/stage2.bin: always
-	$(MAKE) -C $(SRC_DIR)/bootloader/stage2 BUILD_DIR=$(abspath $(BUILD_DIR))
+	$(MAKE) -C $(SRC_DIR)/bootloader/stage2 "BUILD_DIR=$(abspath $(BUILD_DIR))"
 #
 # Kernel
 #
 kernel: $(BUILD_DIR)/kernel.bin
 
 $(BUILD_DIR)/kernel.bin: always 
-	$(MAKE) -C $(SRC_DIR)/kernel BUILD_DIR=$(abspath $(BUILD_DIR)) 
+	$(MAKE) -C $(SRC_DIR)/kernel "BUILD_DIR=$(abspath $(BUILD_DIR))"
 
 #
 # Tools
@@ -67,7 +67,7 @@ $(BUILD_DIR)/kernel.bin: always
 tools: $(BUILD_DIR)/fat.bin
 
 $(BUILD_DIR)/fat.bin: always
-	$(MAKE) -C $(TOOLS_DIR) BUILD_DIR=$(abspath $(BUILD_DIR))
+	$(MAKE) -C $(TOOLS_DIR) "BUILD_DIR=$(abspath $(BUILD_DIR))"
 
 #
 # Always
@@ -79,7 +79,7 @@ always:
 # Clean
 #
 clean:
-	$(MAKE) -C $(SRC_DIR)/kernel BUILD_DIR=$(abspath $(BUILD_DIR)/kernel) clean 
-	$(MAKE) -C $(SRC_DIR)/bootloader/stage1 BUILD_DIR=$(abspath $(BUILD_DIR)/stage1) clean	
-	$(MAKE) -C $(SRC_DIR)/bootloader/stage2 BUILD_DIR=$(abspath $(BUILD_DIR)/stage2) clean
+	$(MAKE) -C $(SRC_DIR)/kernel "BUILD_DIR=$(abspath $(BUILD_DIR)/kernel)" clean
+	$(MAKE) -C $(SRC_DIR)/bootloader/stage1 "BUILD_DIR=$(abspath $(BUILD_DIR)/stage1)" clean	
+	$(MAKE) -C $(SRC_DIR)/bootloader/stage2 "BUILD_DIR=$(abspath $(BUILD_DIR)/stage2)" clean
 	rm -rf $(BUILD_DIR)/*

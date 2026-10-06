@@ -78,12 +78,13 @@ No local toolchain? Build and run GL1TCH OS with just Docker - it installs NASM,
    docker run --rm -it gl1tch-os
    ```
 
-3. **Extract just the built floppy image** (e.g. to run it yourself with `qemu-system-i386 -fda main_floppy.img` or Bochs):
+3. **Extract the built floppy image to `build/main_floppy.img`** so `./run.sh` (or Bochs, or your own `qemu-system-i386` invocation) boots what you just built. **Note:** `docker build` only produces the `gl1tch-os` image - it never touches your host `build/` directory on its own, so skipping this step means `run.sh` keeps booting whatever was there before:
    ```
    id=$(docker create gl1tch-os)
-   docker cp "$id":/os/main_floppy.img ./main_floppy.img
+   docker cp "$id":/os/main_floppy.img ./build/main_floppy.img
    docker rm "$id"
    ```
+   Or just run `./docker-build.sh`, which does steps 1 and 3 in one go.
 
 ## Contributing
 
