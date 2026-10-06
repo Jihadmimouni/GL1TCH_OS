@@ -1,0 +1,78 @@
+<!--
+  GL1TCH OS docs template
+  ========================
+  How to use this file for a new report:
+
+    1. Copy it:  cp docs/template.html docs/reports/YYYY-MM-DD-short-slug.html
+    2. Fill in every <!-- FILL: ... --> placeholder below (then delete the
+       comment markers themselves).
+    3. Add a <li> link to the new file from docs/index.html.
+    4. Optionally render a PDF copy:  ./docs/build-pdf.sh docs/reports/YYYY-MM-DD-short-slug.html
+    5. Keep docs/assets/style.css shared — don't fork it per report.
+
+  Section guide:
+    - Summary:        2-4 sentences, what changed and why, for someone skimming.
+    - What happened:  the narrative, in the order it happened. Use subsections
+                       (h3) per logical change. This is the "report everything
+                       that happened" section.
+    - Files touched:  a table of path -> what changed there.
+    - How it was verified: commands run / tests done and their actual results,
+                       not just "it should work".
+    - Known limitations / follow-ups: be honest about what's not done.
+-->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title><!-- FILL: short title --></title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+
+<header class="banner">
+  <div class="inner">
+    <nav class="crumbs screen-only"><a href="../index.html">docs</a> / reports</nav>
+    <h1><!-- FILL: short title, matches <title> --></h1>
+    <div class="meta">
+      <span><!-- FILL: YYYY-MM-DD --></span>
+      <span><!-- FILL: author, e.g. "Claude Opus 5.5, with Jihad Mimouni" --></span>
+    </div>
+  </div>
+</header>
+
+<div class="page">
+
+  <h2>Summary</h2>
+  <p><!-- FILL: 2-4 sentences --></p>
+
+  <h2>What happened</h2>
+
+  <h3><!-- FILL: first logical change --></h3>
+  <p><!-- FILL --></p>
+
+  <h3><!-- FILL: second logical change --></h3>
+  <p><!-- FILL --></p>
+
+  <h2>Files touched</h2>
+  <table>
+    <tr><th>Path</th><th>Change</th></tr>
+    <tr><td><code><!-- FILL: path --></code></td><td><!-- FILL --></td></tr>
+  </table>
+
+  <h2>How it was verified</h2>
+  <p><!-- FILL: what you actually ran, and what came back --></p>
+  <pre><code><!-- FILL: command(s) and/or output --></code></pre>
+
+  <h2>Known limitations / follow-ups</h2>
+  <ul>
+    <li><!-- FILL --></li>
+  </ul>
+
+  <footer class="pagefoot">
+    GL1TCH OS &mdash; <a href="../index.html">back to docs index</a>
+  </footer>
+
+</div>
+</body>
+</html>

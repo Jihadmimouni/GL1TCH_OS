@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GL1TCH OS architecture</title>
+<link rel="stylesheet" href="assets/style.css">
+<style>
+  .diagram {
+    font-family: "SF Mono", Consolas, Menlo, monospace;
+    font-size: 0.82rem;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    white-space: pre;
+    line-height: 1.35;
+  }
+</style>
+</head>
+<body>
+
+<header class="banner">
+  <div class="inner">
+    <nav class="crumbs screen-only"><a href="index.html">docs</a> / architecture</nav>
+    <h1>GL1TCH OS &mdash; architecture</h1>
+    <div class="meta">
+      <span>How the pieces fit together, boot to shell prompt</span>
+    </div>
+  </div>
+</header>
+
+<div class="page">
+
+  <h2>Boot chain overview</h2>
+  <p>
+    GL1TCH OS boots in three stages off a 1.44&nbsp;MB FAT12 floppy image, each stage
+    loading and jumping to the next. This mirrors the classic "stage1 loads stage2 loads
+    kernel" design used by most x86 real-mode hobby OSes, because the BIOS only ever
+    loads the first 512 bytes of the boot device for you &mdash; everything after that,
+    the OS has to load itself.
+  </p>
+
+  <div class="diagram">BIOS
+  |  loads sector 0 (512 bytes) to 0000:7C00, jumps to it
+  v
+stage1  (src/bootloader/stage1/stage1.asm)
+  |  512-byte boot sector; contains the FAT12 BPB + a tiny FAT reader
+  |  just capable enough to find and load STAGE2.BIN
+  |  loads it to 0000:0500, jumps there
+  v
+stage2  (src/bootloader/stage2/*.asm, main.c)
+  |  real mode, grown-up FAT12 reader (reads boot drive geometry via
+  |  BIOS, walks the FAT chain) -- finds and loads KERNEL.BIN
+  |  loads it to 4000:0000, jumps there with the boot drive in dl
+  v
+kernel  (src/kernel/*.c, *.asm)
+  |  entry.asm sets up ds/es/ss/sp, calls kmain(boot_drive)
+  |  kmain initializes the FAT12 driver and starts the shell
+  v
+shell   (src/kernel/shell.c)
+     interactive command loop, reads from the BIOS keyboard,
+     writes to the BIOS teletype console, never returns
+</div>
+
+  <h2>Why three stages instead of one</h2>
+  <p>
+    The BIOS hands control to exactly 512 bytes (one sector) with no filesystem
+    awareness at all &mdash; stage1 <em>is</em> that sector, so it has to be both small
+    enough to fit and just smart enough to read a FAT12 directory to find the next
+    stage. Stage2 has a whole sector-aligned file to work with, so it can afford a
+    sturdier FAT reader and, significantly, is the first stage built with a C compiler
+    (Open Watcom) rather than hand-written assembly throughout. The kernel is loaded by
+    stage2's FAT reader the same way stage2 itself was loaded by stage1's, which is why
+    <code>src/bootloader/stage2/x86.asm</code> and <code>src/kernel/fat.c</code> solve a
+    related problem (find a file by name, follow its cluster chain) twice, at two very
+    different levels of capability.
+  </p>
+
+  <h2>Kernel module layout</h2>
+  <p>
+    The kernel is a single flat 16-bit real-mode binary (one 64&nbsp;KB segment: code,
+    data and stack all share it, <code>ds == ss == cs</code>), linked from these objects:
+  </p>
+
+  <div class="diagram">entry.asm  ──calls──▶  kernel.c (kmain)
+                              │
+                 ┌────────────┼────────────┐
+                 ▼            ▼            ▼
+            x86.asm/.h   console.c/.h  fat.c/.h
+            (BIOS calls)  (output)    (FAT12 driver)
+                 ▲            ▲            ▲
+                 │            │            │
+            keyboard.c/.h     │       kstring.c/.h
+            (line input)      │       (string/number helpers,
+                 │            │        used by everything above)
+                 └─────┬──────┴────────────┘
+                       ▼
+                  calc.c/.h  ──┐
+                  shell.c/.h ◀─┘
+                  (command loop: help, ls, cd, pwd,
+                   cat, calc, echo, clear, reboot)
+</div>
+
+  <h3>Why a strict layering, not everything calling everything</h3>
+  <ul>
+    <li><strong>x86.asm</strong> is the only place that executes a BIOS interrupt or a
+      raw I/O instruction. Every other module reaches hardware only through its cdecl
+      function wrappers (<code>x86_putc</code>, <code>x86_disk_io</code>, &hellip;), so
+      there is exactly one place to look when something at the BIOS boundary misbehaves.
+      It also carries Open Watcom's 32-bit math runtime helpers
+      (<code>__U4M</code>/<code>__I4M</code>/<code>__U4D</code>/<code>__I4D</code>),
+      since the build links no default library and the compiler still emits calls to
+      them for any <code>uint32_t</code>/<code>int32_t</code> multiply or divide.</li>
+    <li><strong>kstring.c</strong> has no dependencies on anything else in the kernel
+      &mdash; it's the leaf. Its functions are deliberately <em>not</em> named
+      <code>memcpy</code>/<code>strlen</code>/<code>strcmp</code>/etc., because Open
+      Watcom treats those specific names as compiler intrinsics and can silently emit a
+      call using a different calling convention than the cdecl one actually defined
+      here, corrupting arguments. Distinct names (<code>mem_copy</code>,
+      <code>str_len</code>, &hellip;) sidestep that entirely.</li>
+    <li><strong>console.c</strong> and <strong>keyboard.c</strong> depend only on
+      x86.h: one turns characters/numbers into BIOS teletype calls, the other turns BIOS
+      keystrokes into a NUL-terminated line (with backspace support).</li>
+    <li><strong>fat.c</strong> depends on x86.h (for disk I/O) and kstring.h (for name
+      comparison/formatting), but knows nothing about the shell. It owns all on-disk
+      state: the parsed BPB, the cached FAT table, and the current-directory stack. It
+      exposes a small <em>visitor</em>-style API (<code>fat_list_cwd</code>,
+      <code>fat_read_file</code> each take a callback) so callers don't need to know
+      about sectors, clusters or 32-byte directory entries at all.</li>
+    <li><strong>calc.c</strong> depends on nothing but kstring.h. It's a pure
+      string-in, integer-out expression evaluator with no awareness of the console or
+      the shell, which is what makes it independently testable.</li>
+    <li><strong>shell.c</strong> is the only module that depends on all the others. It
+      is intentionally "dumb": it reads a line, splits it into words, and matches the
+      first word against a fixed command table. All real behavior lives in the module
+      that owns the relevant state (fat.c for <code>ls</code>/<code>cd</code>/
+      <code>pwd</code>/<code>cat</code>, calc.c for <code>calc</code>).</li>
+  </ul>
+
+  <h2>The FAT12 driver's internal model</h2>
+  <p>
+    <code>fat.c</code> treats "the root directory" and "a subdirectory" as the same
+    abstraction wherever it can, because on FAT12 they are almost the same thing read two
+    different ways:
+  </p>
+  <ul>
+    <li>The <strong>root directory</strong> lives at a fixed sector range computed from
+      the boot sector's BPB (<code>reserved_sectors + fat_count &times; sectors_per_fat</code>),
+      with a fixed number of 32-byte entries &mdash; it is <em>not</em> part of any
+      cluster chain.</li>
+    <li>A <strong>subdirectory</strong> is stored exactly like a file: a cluster chain
+      you follow through the FAT, whose "contents" happen to be more 32-byte directory
+      entries instead of arbitrary bytes.</li>
+  </ul>
+  <p>
+    <code>fat_iterate_dir(cluster, visitor, ctx)</code> hides that difference behind one
+    convention: <code>cluster == 0</code> means "walk the fixed root sectors",
+    anything else means "walk this cluster chain". Both paths funnel every sector through
+    the same <code>scan_sector</code> entry parser, so there is one place that knows
+    about deleted entries (<code>0xE5</code>), end-of-directory (<code>0x00</code>),
+    long-filename fragments, and volume labels.
+  </p>
+  <p>
+    The current working directory is <em>not</em> read from on-disk <code>.</code>/
+    <code>..</code> entries. It's a small stack the kernel keeps itself
+    (cluster number + name per path segment, 8 levels deep), pushed on a successful
+    <code>cd</code> into a subdirectory and popped on <code>cd ..</code>. <code>cd</code>
+    builds the new path on a <em>temporary</em> copy of that stack and only commits it if
+    every segment resolves, so a <code>cd a/b/nonexistent</code> leaves the shell exactly
+    where it started rather than partway into <code>a/b</code>.
+  </p>
+
+  <h2>Build pipeline</h2>
+  <div class="diagram">make (top-level)
+  ├─▶ src/bootloader/stage1/makefile  ──nasm──▶  build/stage1.bin
+  ├─▶ src/bootloader/stage2/makefile  ──nasm + wcc/wlink──▶  build/stage2.bin
+  ├─▶ src/kernel/makefile             ──nasm + wcc/wlink──▶  build/kernel.bin
+  └─▶ tools/makefile                  ──gcc──▶  build/*.bin (host-side test files)
+         │
+         ▼
+  dd + mkfs.fat + mcopy  ──▶  build/main_floppy.img  (1.44MB FAT12 floppy)
+</div>
+  <p>
+    Stage2 and the kernel are both built with Open Watcom (<code>wcc</code>/
+    <code>wlink</code>), the only C compiler in this toolchain that still targets 16-bit
+    real mode; stage1 is pure NASM; the <code>tools/</code> directory is ordinary
+    native (gcc) code that runs on the <em>host</em>, not inside the OS &mdash; it's
+    separate from the boot chain. The <code>Dockerfile</code> wraps all of this in a
+    reproducible Ubuntu 24.04 image so the exact toolchain versions don't have to be
+    installed on the host; see <a href="reports/2026-10-06-docker-fix-and-c-kernel-shell.html">the
+    2026-10-06 report</a> for what had to be fixed to get that working.
+  </p>
+
+  <h2>Testing without a serial port</h2>
+  <p>
+    The kernel talks to the BIOS console (<code>int 10h</code>/<code>int 16h</code>),
+    not a serial UART, so it can't be tested by just piping text at QEMU's
+    <code>-serial stdio</code>. It was instead tested by booting QEMU headless with a
+    monitor socket, sending real keystrokes with the monitor's <code>sendkey</code>
+    command, and reading the result straight out of the VGA text buffer in guest memory
+    (<code>pmemsave 0xb8000 4000 ...</code>, 80&times;25 cells &times; 2 bytes) &mdash; a
+    deterministic, screenshot-free way to drive and verify a BIOS-console kernel.
+  </p>
+
+  <footer class="pagefoot">
+    GL1TCH OS &mdash; <a href="index.html">back to docs index</a>
+  </footer>
+
+</div>
+</body>
+</html>

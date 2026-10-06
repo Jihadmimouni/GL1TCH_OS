@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GL1TCH OS docs</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<header class="banner">
+  <div class="inner">
+    <h1>GL1TCH OS &mdash; docs</h1>
+    <div class="meta"><span>Reports on what changed and why, in the order it happened</span></div>
+  </div>
+</header>
+
+<div class="page">
+
+  <h2>Architecture</h2>
+  <ul>
+    <li><a href="architecture.html">Boot chain, kernel module layout, and the FAT12 driver's internal model</a></li>
+  </ul>
+
+  <h2>Reports</h2>
+  <ul>
+    <li>
+      <a href="reports/2026-10-06-docker-fix-and-c-kernel-shell.html">2026-10-06 &mdash; Docker build fix, and a C kernel shell with arithmetic + file explorer</a>
+    </li>
+  </ul>
+
+  <h2>Adding a new report</h2>
+  <ol>
+    <li>Copy <code>docs/template.html</code> to <code>docs/reports/YYYY-MM-DD-short-slug.html</code> and fill in its placeholders.</li>
+    <li>Add a link to it in the list above.</li>
+    <li>Optionally render it to PDF: <code>./docs/build-pdf.sh docs/reports/YYYY-MM-DD-short-slug.html</code></li>
+  </ol>
+
+  <h2>Building a PDF</h2>
+  <p>
+    <code>docs/build-pdf.sh</code> renders any report (or this index) to a PDF next to
+    the source file. It uses a locally installed browser/PDF tool if one is found, and
+    otherwise falls back to running headless Chrome via Docker, so it works even on a
+    machine with nothing but Docker installed:
+  </p>
+  <pre><code># render one report
+./docs/build-pdf.sh docs/reports/2026-10-06-docker-fix-and-c-kernel-shell.html
+
+# render every report
+./docs/build-pdf.sh --all</code></pre>
+
+  <footer class="pagefoot">GL1TCH OS</footer>
+
+</div>
+</body>
+</html>
