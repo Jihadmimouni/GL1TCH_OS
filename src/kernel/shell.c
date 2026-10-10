@@ -470,6 +470,7 @@ static void _cdecl execute_segment(char *seg) {
     }
     if (*gt == '>') {
         char *t;
+        char *end;
         if (gt[1] == '>') {
             append = 1;
             t = gt + 2;
@@ -478,6 +479,15 @@ static void _cdecl execute_segment(char *seg) {
             t = gt + 1;
         }
         *gt = '\0';
+        /* trim the trailing space(s) left on seg before where '>' was
+         * (e.g. "echo text " in "echo text > file") - without this,
+         * that space flows straight through rest_after_first_token()
+         * into whatever echo/write/append/calc capture and redirect */
+        end = gt;
+        while (end > seg && *(end - 1) == ' ') {
+            end--;
+        }
+        *end = '\0';
         while (*t == ' ') {
             t++;
         }
