@@ -4,6 +4,7 @@
 #include "kstring.h"
 #include "calc.h"
 #include "fat.h"
+#include "mem.h"
 #include "x86.h"
 
 /* Bumped from 128 so a few chained commands (";"/"&&") still fit on one
@@ -344,6 +345,20 @@ static void _cdecl cmd_df(void) {
     con_puts(" free)\r\n");
 }
 
+static void _cdecl cmd_meminfo(void) {
+    uint32_t total, used, free_bytes;
+
+    mem_get_stats(&total, &used, &free_bytes);
+
+    con_puts("heap: ");
+    con_print_u32(total, 10);
+    con_puts(" bytes total, ");
+    con_print_u32(used, 10);
+    con_puts(" bytes used, ");
+    con_print_u32(free_bytes, 10);
+    con_puts(" bytes free\r\n");
+}
+
 /* args is the remainder of the line after "write"/"append" (from
  * rest_after_first_token); splits it in place into a filename and the
  * text to write. */
@@ -415,6 +430,7 @@ static void _cdecl cmd_help(void) {
     con_puts("  cp <src> <dst>  copy a file (max 32KB)\r\n");
     con_puts("  mv <src> <dst>  move/rename a file\r\n");
     con_puts("  df              show filesystem space usage\r\n");
+    con_puts("  meminfo         show kernel heap usage\r\n");
     con_puts("  calc <expr>     evaluate an arithmetic expression\r\n");
     con_puts("  echo <text>     print text back\r\n");
     con_puts("  clear           clear the screen\r\n");
@@ -511,6 +527,8 @@ static void _cdecl dispatch(char *tokline, char *raw) {
         cmd_mv(argc > 1 ? argv[1] : "", argc > 2 ? argv[2] : "");
     } else if (str_cmp(argv[0], "df") == 0) {
         cmd_df();
+    } else if (str_cmp(argv[0], "meminfo") == 0) {
+        cmd_meminfo();
     } else if (str_cmp(argv[0], "write") == 0) {
         cmd_write_or_append(rest_after_first_token(raw), 0);
     } else if (str_cmp(argv[0], "append") == 0) {

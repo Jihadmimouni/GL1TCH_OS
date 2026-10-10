@@ -30,9 +30,27 @@ reading the current source, not a generic OS wishlist) - check items off as
 they land:
 
 **Architectural (blocking - everything else tends to need these first):**
-- [ ] **Memory manager.** There's no heap/allocator anywhere; every buffer in
-  the kernel is a fixed-size stack or static array. Needed before anything
-  below can deal with data whose size isn't known at compile time.
+- [x] **Memory manager.** `src/kernel/mem.c`/`mem.h` add a classic header-based
+  first-fit heap (`mem_init`/`kmalloc`/`kfree`/`mem_get_stats`) over a single
+  static arena (`g_heap`), with splitting on allocation and immediate-neighbor
+  coalescing on free. A `meminfo` shell command and a boot-time
+  `mem_self_test()` (prints `meminfo self-test: PASS`/`FAIL: <reason>` before
+  the shell prompt) exercise it: distinct non-overlapping allocations, freed-slot
+  reuse, a clean out-of-memory failure that leaves the heap usable, and
+  neighbor coalescing. Real limits, worth being explicit about: this is a
+  *near-pointer* heap inside the kernel's single 64KB real-mode segment -
+  no far pointers, no multiple segments, nothing resembling virtual memory
+  or protected-mode paging (those stay open items below). It's also
+  deliberately small (512 bytes): checking `build/kernel.map` after adding it
+  showed the kernel's existing static buffers (chiefly `shell.c`'s 32KB
+  `g_cp_buf`, plus `fat.c`'s ~4.5KB `g_fat_buf`) already leave only ~1.3KB of
+  slack in the entire 64KB segment before the real call stack
+  (`sp = 0xFFF0`, see `entry.asm`) would start colliding with it - nowhere
+  near the 4-16KB that would otherwise be a reasonable heap size. 512 bytes
+  keeps 842 bytes of verified real margin below the stack. Growing this heap
+  meaningfully will need either shrinking an existing static buffer or
+  moving beyond the single-64KB-segment model (see the protected-mode item
+  below) - don't just bump `HEAP_SIZE` without rechecking the map.
 - [ ] **Program loading.** There's no way to load and run a separate binary
   from disk - every shell command is compiled straight into `kernel.bin`.
   (`tools/hello.c`'s `hello1.bin`, copied onto the floppy as `::fat`, looks
