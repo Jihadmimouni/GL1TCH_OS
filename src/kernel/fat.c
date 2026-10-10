@@ -12,6 +12,8 @@
 #define FAT_EOC            0x0FF8  /* cluster values >= this mean end of chain */
 #define FAT_EOC_MARK       0x0FFF  /* value written to mark a new end of chain */
 #define FAT_DELETED        0xE5
+#define LFN_CHARS_PER_ENTRY 13
+#define LFN_MAX_CHARS       FAT_MAX_LFN  /* from fat.h: fat_dirent_t.lfn's size */
 
 static uint8_t g_drive;
 static uint16_t g_sectors_per_track;
@@ -117,7 +119,103 @@ static void _cdecl fat_format_name(const uint8_t *raw11, char *out) {
     out[j] = '\0';
 }
 
-static int _cdecl scan_sector(const uint8_t *buf, fat_visitor_t visitor, void *ctx, int *end_of_dir) {
+/*
+ * Read-only VFAT long-filename support: accumulates the chain of
+ * 0x0F-attribute LFN fragment entries that (on a real VFAT directory)
+ * immediately precede a short 8.3 entry, and - only if the chain's
+ * checksum matches that short entry - hands back the assembled long
+ * name for display. This never affects which short name cd/cat/rm/
+ * fat_find_file match against; it only changes what `ls` prints.
+ */
+typedef struct {
+    char buf[LFN_MAX_CHARS];
+    int collecting;
+    int overflow;
+    uint8_t checksum;
+} lfn_acc_t;
+
+static void _cdecl lfn_reset(lfn_acc_t *lfn) {
+    lfn->collecting = 0;
+    lfn->overflow = 0;
+}
+
+/* Standard VFAT short-name checksum algorithm. */
+static uint8_t _cdecl lfn_checksum(const uint8_t *name11) {
+    uint8_t sum = 0;
+    int i;
+    for (i = 0; i < 11; i++) {
+        sum = (uint8_t)(((sum & 1) ? 0x80 : 0) + (sum >> 1) + name11[i]);
+    }
+    return sum;
+}
+
+/* Decodes the UTF-16LE code unit at byte offset off/off+1 in a raw LFN
+ * entry. Returns 0 for the 0x0000 terminator; non-ASCII code points
+ * degrade to '?' since this console only does plain ASCII text. */
+static char _cdecl lfn_char(const uint8_t *raw, int off) {
+    uint8_t lo = raw[off];
+    uint8_t hi = raw[off + 1];
+    if (lo == 0 && hi == 0) {
+        return 0;
+    }
+    if (hi != 0) {
+        return '?';
+    }
+    return (char)lo;
+}
+
+static void _cdecl lfn_accumulate(lfn_acc_t *lfn, const uint8_t *raw) {
+    int seq = raw[0] & 0x3F;
+    uint8_t cksum = raw[13];
+    int base;
+    int i;
+
+    if (seq == 0 || seq > (LFN_MAX_CHARS / LFN_CHARS_PER_ENTRY)) {
+        lfn->collecting = 1;
+        lfn->overflow = 1;              /* too long/garbled: fall back to short name */
+        return;
+    }
+
+    if (!lfn->collecting) {
+        lfn->collecting = 1;
+        lfn->overflow = 0;
+        lfn->checksum = cksum;
+        mem_set(lfn->buf, 0, LFN_MAX_CHARS);
+    } else if (lfn->checksum != cksum) {
+        lfn->overflow = 1;              /* inconsistent chain */
+        return;
+    }
+
+    base = (seq - 1) * LFN_CHARS_PER_ENTRY;
+    for (i = 0; i < LFN_CHARS_PER_ENTRY; i++) {
+        int byte_off = (i < 5) ? (1 + i * 2)
+                      : (i < 11) ? (14 + (i - 5) * 2)
+                      : (28 + (i - 11) * 2);
+        char c = lfn_char(raw, byte_off);
+        if (c == 0) {
+            break;
+        }
+        if (base + i < LFN_MAX_CHARS - 1) {
+            lfn->buf[base + i] = c;
+        }
+    }
+}
+
+/* True if a complete, checksum-valid LFN chain was just collected for
+ * the short entry about to be reported (short_name11 = its raw 11-byte
+ * on-disk name). */
+static int _cdecl lfn_ready(const lfn_acc_t *lfn, const uint8_t *short_name11) {
+    if (!lfn->collecting || lfn->overflow) {
+        return 0;
+    }
+    if (lfn_checksum(short_name11) != lfn->checksum) {
+        return 0;
+    }
+    return lfn->buf[0] != '\0';
+}
+
+static int _cdecl scan_sector(const uint8_t *buf, fat_visitor_t visitor, void *ctx,
+                               int *end_of_dir, lfn_acc_t *lfn) {
     int i;
 
     for (i = 0; i < SECTOR_SIZE / 32; i++) {
@@ -130,15 +228,19 @@ static int _cdecl scan_sector(const uint8_t *buf, fat_visitor_t visitor, void *c
             return 0;
         }
         if ((uint8_t)e[0] == 0xE5) {
+            lfn_reset(lfn);
             continue;                       /* deleted entry */
         }
         if (e[11] == FAT_ATTR_LFN) {
+            lfn_accumulate(lfn, e);
             continue;                        /* long filename fragment */
         }
         if (e[11] & FAT_ATTR_VOLUME_ID) {
+            lfn_reset(lfn);
             continue;                        /* volume label */
         }
         if (e[0] == '.') {
+            lfn_reset(lfn);
             continue;                        /* "." / ".." */
         }
 
@@ -146,6 +248,15 @@ static int _cdecl scan_sector(const uint8_t *buf, fat_visitor_t visitor, void *c
         de.attr = e[11];
         de.cluster = rd16(e + 26);
         de.size = rd32(e + 28);
+        de.wrt_time = rd16(e + 22);
+        de.wrt_date = rd16(e + 24);
+
+        if (lfn_ready(lfn, e)) {
+            str_copy(de.lfn, lfn->buf);
+        } else {
+            de.lfn[0] = '\0';
+        }
+        lfn_reset(lfn);
 
         vr = visitor(&de, ctx);
         if (vr) {
@@ -159,6 +270,9 @@ static int _cdecl scan_sector(const uint8_t *buf, fat_visitor_t visitor, void *c
 static int _cdecl fat_iterate_dir(uint16_t start_cluster, fat_visitor_t visitor, void *ctx) {
     uint8_t buf[SECTOR_SIZE];
     int end_of_dir = 0;
+    lfn_acc_t lfn;
+
+    lfn_reset(&lfn);
 
     if (start_cluster == 0) {
         uint16_t s;
@@ -167,7 +281,7 @@ static int _cdecl fat_iterate_dir(uint16_t start_cluster, fat_visitor_t visitor,
             if (!read_sector(g_root_dir_lba + s, buf)) {
                 return 0;
             }
-            r = scan_sector(buf, visitor, ctx, &end_of_dir);
+            r = scan_sector(buf, visitor, ctx, &end_of_dir, &lfn);
             if (r) {
                 return r;
             }
@@ -188,7 +302,7 @@ static int _cdecl fat_iterate_dir(uint16_t start_cluster, fat_visitor_t visitor,
                 if (!read_sector(lba + c, buf)) {
                     return 0;
                 }
-                r = scan_sector(buf, visitor, ctx, &end_of_dir);
+                r = scan_sector(buf, visitor, ctx, &end_of_dir, &lfn);
                 if (r) {
                     return r;
                 }
@@ -592,11 +706,56 @@ static int _cdecl format_name_83(const char *name, uint8_t *raw11) {
     return 1;
 }
 
+/* Builds a brand-new 32-byte directory entry. CrtTime/CrtDate,
+ * LastAccessDate and WrtTime/WrtDate are all stamped with the current
+ * BIOS RTC time, since creation and last-write are the same event for
+ * a freshly made entry. FstClusHI (bytes 20-21) stays 0: this project
+ * only ever deals with FAT12, which has no high cluster word. */
 static void _cdecl build_dirent_raw(const uint8_t *name11, uint8_t attr,
                                      uint16_t cluster, uint32_t size, uint8_t *raw) {
+    uint16_t fat_date, fat_time;
+
     mem_set(raw, 0, 32);
     mem_copy(raw, name11, 11);
     raw[11] = attr;
+
+    x86_get_datetime(&fat_date, &fat_time);
+
+    raw[14] = (uint8_t)(fat_time & 0xFF);       /* CrtTime */
+    raw[15] = (uint8_t)(fat_time >> 8);
+    raw[16] = (uint8_t)(fat_date & 0xFF);       /* CrtDate */
+    raw[17] = (uint8_t)(fat_date >> 8);
+    raw[18] = (uint8_t)(fat_date & 0xFF);       /* LastAccessDate */
+    raw[19] = (uint8_t)(fat_date >> 8);
+    raw[22] = (uint8_t)(fat_time & 0xFF);       /* WrtTime */
+    raw[23] = (uint8_t)(fat_time >> 8);
+    raw[24] = (uint8_t)(fat_date & 0xFF);       /* WrtDate */
+    raw[25] = (uint8_t)(fat_date >> 8);
+
+    raw[26] = (uint8_t)(cluster & 0xFF);
+    raw[27] = (uint8_t)(cluster >> 8);
+    raw[28] = (uint8_t)(size & 0xFF);
+    raw[29] = (uint8_t)((size >> 8) & 0xFF);
+    raw[30] = (uint8_t)((size >> 16) & 0xFF);
+    raw[31] = (uint8_t)((size >> 24) & 0xFF);
+}
+
+/* Patches an existing 32-byte raw entry (already containing the right
+ * name/attr/CrtTime/CrtDate from when it was created) with a new
+ * cluster/size and a fresh WrtTime/WrtDate, leaving everything else -
+ * including CrtTime/CrtDate - untouched. Used by fat_write_file() when
+ * it's updating an entry that already exists, rather than creating one
+ * from scratch via build_dirent_raw(). */
+static void _cdecl update_dirent_write(uint8_t *raw, uint16_t cluster, uint32_t size) {
+    uint16_t fat_date, fat_time;
+
+    x86_get_datetime(&fat_date, &fat_time);
+
+    raw[22] = (uint8_t)(fat_time & 0xFF);       /* WrtTime */
+    raw[23] = (uint8_t)(fat_time >> 8);
+    raw[24] = (uint8_t)(fat_date & 0xFF);       /* WrtDate */
+    raw[25] = (uint8_t)(fat_date >> 8);
+
     raw[26] = (uint8_t)(cluster & 0xFF);
     raw[27] = (uint8_t)(cluster >> 8);
     raw[28] = (uint8_t)(size & 0xFF);
@@ -1139,7 +1298,15 @@ int _cdecl fat_write_file(const char *path, const uint8_t *data, uint32_t len,
         return 0;
     }
 
-    build_dirent_raw(name11, FAT_ATTR_ARCHIVE, first_cluster, total_size, raw);
+    if (ctx.found_existing) {
+        /* Rewriting an entry that already exists (plain write or
+         * append): keep its name/attr/CrtTime/CrtDate as they were,
+         * only the cluster/size and WrtTime/WrtDate change. */
+        mem_copy(raw, ctx.existing_raw, 32);
+        update_dirent_write(raw, first_cluster, total_size);
+    } else {
+        build_dirent_raw(name11, FAT_ATTR_ARCHIVE, first_cluster, total_size, raw);
+    }
     if (!write_dirent_raw(&target_loc, raw)) {
         *err_msg = "disk error";
         return 0;

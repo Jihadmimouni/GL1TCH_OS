@@ -164,6 +164,126 @@ _x86_disk_io:
     ret
 
 ;
+; void _cdecl x86_get_datetime(uint16_t *fat_date, uint16_t *fat_time);
+; Reads the current date/time from the BIOS real-time clock (int 1Ah,
+; AH=02h for time, AH=04h for date; both return packed BCD) and packs
+; the result directly into FAT's on-disk date/time formats:
+;   date: bits 15-9 = year-1980, bits 8-5 = month(1-12), bits 4-0 = day(1-31)
+;   time: bits 15-11 = hour(0-23), bits 10-5 = minute(0-59), bits 4-0 = second/2
+;
+global _x86_get_datetime
+_x86_get_datetime:
+    push bp
+    mov bp, sp
+    sub sp, 14                          ; locals: hour,min,sec,century,year,month,day
+    push bx
+    push cx
+    push dx
+    push si
+
+    ; ---- time: ah=02h -> ch=hour cl=minute dh=second, all packed BCD ----
+    mov ah, 0x02
+    int 0x1a
+
+    mov al, ch
+    call datetime_bcd2bin
+    mov [bp - 2], ax                    ; hour
+
+    mov al, cl
+    call datetime_bcd2bin
+    mov [bp - 4], ax                    ; minute
+
+    mov al, dh
+    call datetime_bcd2bin
+    mov [bp - 6], ax                    ; second
+
+    ; ---- date: ah=04h -> ch=century cl=year dh=month dl=day, all packed BCD ----
+    mov ah, 0x04
+    int 0x1a
+
+    mov al, ch
+    call datetime_bcd2bin
+    mov [bp - 8], ax                    ; century (e.g. 20)
+
+    mov al, cl
+    call datetime_bcd2bin
+    mov [bp - 10], ax                   ; year of century (0-99)
+
+    mov al, dh
+    call datetime_bcd2bin
+    mov [bp - 12], ax                   ; month
+
+    mov al, dl
+    call datetime_bcd2bin
+    mov [bp - 14], ax                   ; day
+
+    ; ---- pack FAT date ----
+    mov ax, [bp - 8]                    ; century
+    mov bx, 100
+    mul bx                              ; dx:ax = century * 100 (fits in ax)
+    add ax, [bp - 10]                   ; + year of century = full year
+    sub ax, 1980                        ; year - 1980
+    and ax, 0x007F
+    mov cx, ax
+    shl cx, 9                           ; bits 15-9
+
+    mov ax, [bp - 12]                   ; month
+    and ax, 0x000F
+    mov bx, ax
+    shl bx, 5                           ; bits 8-5
+    or cx, bx
+
+    mov ax, [bp - 14]                   ; day
+    and ax, 0x001F                      ; bits 4-0
+    or cx, ax
+
+    mov bx, [bp + 4]                    ; uint16_t *fat_date
+    mov [bx], cx
+
+    ; ---- pack FAT time ----
+    mov ax, [bp - 2]                    ; hour
+    and ax, 0x001F
+    mov cx, ax
+    shl cx, 11                          ; bits 15-11
+
+    mov ax, [bp - 4]                    ; minute
+    and ax, 0x003F
+    mov bx, ax
+    shl bx, 5                           ; bits 10-5
+    or cx, bx
+
+    mov ax, [bp - 6]                    ; second
+    shr ax, 1                           ; /2
+    and ax, 0x001F                      ; bits 4-0
+    or cx, ax
+
+    mov bx, [bp + 6]                    ; uint16_t *fat_time
+    mov [bx], cx
+
+    pop si
+    pop dx
+    pop cx
+    pop bx
+    mov sp, bp
+    pop bp
+    ret
+
+; Converts a packed-BCD byte in AL (0x00-0x99) to binary, returned
+; zero-extended in AX. Destroys AX and BX only; not a global symbol,
+; used only by x86_get_datetime above.
+datetime_bcd2bin:
+    mov bl, al
+    and bl, 0x0F                        ; bl = ones digit
+    mov bh, al
+    shr bh, 4                           ; bh = tens digit
+    mov al, bh
+    xor ah, ah
+    mov bh, 10
+    mul bh                              ; ax = tens * 10 (fits in al, ah = 0)
+    add al, bl
+    ret
+
+;
 ; 32-bit arithmetic helpers. Open Watcom emits calls to these for long
 ; multiply/divide in 16-bit code; they normally come from its C library,
 ; which the kernel doesn't link. Operands use 386 32-bit registers.

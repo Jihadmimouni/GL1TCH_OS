@@ -3,12 +3,28 @@
 
 #define FAT_ATTR_DIRECTORY 0x10
 #define FAT_MAX_NAME       13  /* "12345678.123" + NUL */
+#define FAT_MAX_LFN        64  /* read-only display name; see fat.c's
+                                 * lfn_accumulate(). Longer real names are
+                                 * truncated back to the short 8.3 name. */
 
 typedef struct {
     char name[FAT_MAX_NAME];
     uint8_t attr;
     uint16_t cluster;
     uint32_t size;
+    /* Last-write date/time, packed in on-disk FAT format (see
+     * x86_get_datetime's comment in x86.h for the bit layout). */
+    uint16_t wrt_date;
+    uint16_t wrt_time;
+    /*
+     * The entry's VFAT long filename, if a valid, checksum-matching
+     * chain of LFN fragments preceded it on disk; empty string if not
+     * (e.g. the entry only ever had a short 8.3 name, or this driver
+     * created it itself - this driver never writes LFN entries). This
+     * is purely a nicer display string: cd/cat/rm/fat_find_file always
+     * match against `name` (the short name), never this field.
+     */
+    char lfn[FAT_MAX_LFN];
 } fat_dirent_t;
 
 /* Returns 1 on success, 0 if the boot sector or FAT could not be read. */

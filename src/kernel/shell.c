@@ -9,23 +9,63 @@
 #define LINE_MAX 128
 #define MAX_ARGS 8
 
+/* Prints v zero-padded to two digits (0-99). u32_to_str() doesn't
+ * zero-pad, so this is a tiny local helper rather than a change to
+ * shared string code. */
+static void _cdecl print_2d(uint16_t v) {
+    if (v < 10) {
+        con_putc('0');
+    }
+    con_print_u32(v, 10);
+}
+
+/* Prints an on-disk FAT date/time pair (see x86_get_datetime's comment
+ * in x86.h for the bit layout) as "YYYY-MM-DD HH:MM". */
+static void _cdecl print_fat_datetime(uint16_t fdate, uint16_t ftime) {
+    uint16_t year = (uint16_t)(1980 + (fdate >> 9));
+    uint16_t month = (uint16_t)((fdate >> 5) & 0x0F);
+    uint16_t day = (uint16_t)(fdate & 0x1F);
+    uint16_t hour = (uint16_t)(ftime >> 11);
+    uint16_t minute = (uint16_t)((ftime >> 5) & 0x3F);
+
+    con_print_u32(year, 10);
+    con_putc('-');
+    print_2d(month);
+    con_putc('-');
+    print_2d(day);
+    con_putc(' ');
+    print_2d(hour);
+    con_putc(':');
+    print_2d(minute);
+}
+
 static int _cdecl ls_visitor(const fat_dirent_t *e, void *ctx) {
+    const char *display_name = (e->lfn[0] != '\0') ? e->lfn : e->name;
+    uint16_t pad;
     (void)ctx;
+
     if (e->attr & FAT_ATTR_DIRECTORY) {
         con_puts("  <DIR>  ");
     } else {
         con_puts("        ");
     }
-    con_puts(e->name);
+    con_puts(display_name);
+
+    pad = (uint16_t)str_len(display_name);
+    while (pad < 13) {
+        con_putc(' ');
+        pad++;
+    }
+
     if (!(e->attr & FAT_ATTR_DIRECTORY)) {
-        uint16_t pad = (uint16_t)str_len(e->name);
-        while (pad < 13) {
-            con_putc(' ');
-            pad++;
-        }
         con_print_u32(e->size, 10);
         con_puts(" bytes");
+    } else {
+        con_puts("      ");
     }
+
+    con_puts("  ");
+    print_fat_datetime(e->wrt_date, e->wrt_time);
     con_puts("\r\n");
     return 0;
 }
