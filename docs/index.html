@@ -8,50 +8,97 @@
 </head>
 <body>
 
-<header class="banner">
-  <div class="inner">
-    <h1>GL1TCH OS &mdash; docs</h1>
-    <div class="meta"><span>Reports on what changed and why, in the order it happened</span></div>
-  </div>
-</header>
+<a class="skip-link" href="#main">Skip to content</a>
 
-<div class="page">
+<div class="shell">
 
-  <h2>Architecture</h2>
-  <ul>
-    <li><a href="architecture.html">Boot chain, kernel module layout, and the FAT12 driver's internal model</a></li>
-    <li><a href="reference/index.html">Code reference &mdash; every function in <code>src/kernel/</code>, one page per module</a></li>
-  </ul>
+  <button class="sidebar-toggle screen-only" id="sidebarToggle" type="button" aria-label="Toggle navigation" aria-expanded="false">&#9776;</button>
 
-  <h2>Reports</h2>
-  <ul>
-    <li>
-      <a href="reports/2026-10-06-docker-fix-and-c-kernel-shell.html">2026-10-06 &mdash; Docker build fix, and a C kernel shell with arithmetic + file explorer</a>
-    </li>
-  </ul>
+  <aside class="sidebar screen-only" id="sidebar">
+    <div class="sidebar-brand"><a href="index.html">GL1TCH OS</a><span class="ver">docs</span></div>
+    <nav class="sidebar-nav" aria-label="Documentation">
+      <div class="nav-group">
+        <a href="index.html" class="nav-link current">Overview</a>
+        <a href="architecture.html" class="nav-link">Architecture</a>
+      </div>
+      <div class="nav-group">
+        <h4 class="nav-heading">Code reference</h4>
+        <a href="reference/index.html" class="nav-link sub">Overview</a>
+        <a href="reference/x86.html" class="nav-link sub">x86</a>
+        <a href="reference/kstring.html" class="nav-link sub">kstring</a>
+        <a href="reference/console.html" class="nav-link sub">console</a>
+        <a href="reference/keyboard.html" class="nav-link sub">keyboard</a>
+        <a href="reference/calc.html" class="nav-link sub">calc</a>
+        <a href="reference/fat.html" class="nav-link sub">fat</a>
+        <a href="reference/shell.html" class="nav-link sub">shell</a>
+        <a href="reference/entry.html" class="nav-link sub">entry / kmain</a>
+      </div>
+      <div class="nav-group">
+        <h4 class="nav-heading">Reports</h4>
+        <a href="reports/2026-10-06-docker-fix-and-c-kernel-shell.html" class="nav-link sub">2026-10-06 &mdash; Docker fix + C shell</a>
+      </div>
+    </nav>
+    <button class="theme-toggle" id="themeToggle" type="button">
+      <span class="theme-icon">&#9790;</span><span class="theme-label">Dark mode</span>
+    </button>
+  </aside>
 
-  <h2>Adding a new report</h2>
-  <ol>
-    <li>Copy <code>docs/template.html</code> to <code>docs/reports/YYYY-MM-DD-short-slug.html</code> and fill in its placeholders.</li>
-    <li>Add a link to it in the list above.</li>
-    <li>Optionally render it to PDF: <code>./docs/build-pdf.sh docs/reports/YYYY-MM-DD-short-slug.html</code></li>
-  </ol>
+  <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
 
-  <h2>Building a PDF</h2>
-  <p>
-    <code>docs/build-pdf.sh</code> renders any report (or this index) to a PDF next to
-    the source file. It uses a locally installed browser/PDF tool if one is found, and
-    otherwise falls back to running headless Chrome via Docker, so it works even on a
-    machine with nothing but Docker installed:
-  </p>
-  <pre><code># render one report
+  <div class="content-col">
+    <header class="topbar screen-only">
+      <nav class="crumbs">Documentation</nav>
+    </header>
+
+    <main class="page" id="main">
+      <h1>GL1TCH OS &mdash; docs</h1>
+      <p class="lead">Reports on what changed and why, in the order it happened.</p>
+
+      <h2>Architecture</h2>
+      <ul>
+        <li><a href="architecture.html">Boot chain, kernel module layout, and the FAT12 driver's internal model</a></li>
+        <li><a href="reference/index.html">Code reference &mdash; every function in <code>src/kernel/</code>, one page per module</a></li>
+      </ul>
+
+      <h2>Reports</h2>
+      <ul>
+        <li>
+          <a href="reports/2026-10-06-docker-fix-and-c-kernel-shell.html">2026-10-06 &mdash; Docker build fix, and a C kernel shell with arithmetic + file explorer</a>
+        </li>
+      </ul>
+
+      <h2>Adding a new report</h2>
+      <ol>
+        <li>Copy <code>docs/template.html</code> to <code>docs/reports/YYYY-MM-DD-short-slug.html</code> and fill in its placeholders.</li>
+        <li>Add a link to it in the list above, and to the sidebar nav in every page under <code>docs/</code> (see the template's header comment).</li>
+        <li>Optionally render it to PDF: <code>./docs/build-pdf.sh docs/reports/YYYY-MM-DD-short-slug.html</code></li>
+      </ol>
+
+      <h2>Building a PDF</h2>
+      <p>
+        <code>docs/build-pdf.sh</code> renders any report (or this index) to a PDF next to
+        the source file. It uses a locally installed browser/PDF tool if one is found, and
+        otherwise falls back to running headless Chrome via Docker, so it works even on a
+        machine with nothing but Docker installed:
+      </p>
+      <pre><code># render one report
 ./docs/build-pdf.sh docs/reports/2026-10-06-docker-fix-and-c-kernel-shell.html
 
 # render every report
 ./docs/build-pdf.sh --all</code></pre>
 
-  <footer class="pagefoot">GL1TCH OS</footer>
+      <footer class="pagefoot">
+        GL1TCH OS &mdash; <a href="architecture.html">architecture</a> &middot; <a href="reference/index.html">code reference</a>
+      </footer>
+    </main>
+  </div>
+
+  <aside class="toc screen-only" id="toc">
+    <div class="toc-title">On this page</div>
+  </aside>
 
 </div>
+
+<script src="assets/docs.js"></script>
 </body>
 </html>

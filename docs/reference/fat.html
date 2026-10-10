@@ -8,206 +8,384 @@
 </head>
 <body>
 
-<header class="banner">
-  <div class="inner">
-    <nav class="crumbs screen-only"><a href="../index.html">docs</a> / <a href="index.html">code reference</a> / fat</nav>
-    <h1>fat</h1>
-    <div class="meta"><span>FAT12 filesystem driver</span></div>
+<a class="skip-link" href="#main">Skip to content</a>
+
+<div class="shell">
+
+  <button class="sidebar-toggle screen-only" id="sidebarToggle" type="button" aria-label="Toggle navigation" aria-expanded="false">&#9776;</button>
+
+  <aside class="sidebar screen-only" id="sidebar">
+    <div class="sidebar-brand"><a href="../index.html">GL1TCH OS</a><span class="ver">docs</span></div>
+    <nav class="sidebar-nav" aria-label="Documentation">
+      <div class="nav-group">
+        <a href="../index.html" class="nav-link">Overview</a>
+        <a href="../architecture.html" class="nav-link">Architecture</a>
+      </div>
+      <div class="nav-group">
+        <h4 class="nav-heading">Code reference</h4>
+        <a href="index.html" class="nav-link sub">Overview</a>
+        <a href="x86.html" class="nav-link sub">x86</a>
+        <a href="kstring.html" class="nav-link sub">kstring</a>
+        <a href="console.html" class="nav-link sub">console</a>
+        <a href="keyboard.html" class="nav-link sub">keyboard</a>
+        <a href="calc.html" class="nav-link sub">calc</a>
+        <a href="fat.html" class="nav-link sub current">fat</a>
+        <a href="shell.html" class="nav-link sub">shell</a>
+        <a href="entry.html" class="nav-link sub">entry / kmain</a>
+      </div>
+      <div class="nav-group">
+        <h4 class="nav-heading">Reports</h4>
+        <a href="../reports/2026-10-06-docker-fix-and-c-kernel-shell.html" class="nav-link sub">2026-10-06 &mdash; Docker fix + C shell</a>
+      </div>
+    </nav>
+    <button class="theme-toggle" id="themeToggle" type="button">
+      <span class="theme-icon">&#9790;</span><span class="theme-label">Dark mode</span>
+    </button>
+  </aside>
+
+  <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
+  <div class="content-col">
+    <header class="topbar screen-only">
+      <nav class="crumbs"><a href="../index.html">docs</a><span class="sep">/</span><a href="index.html">code reference</a><span class="sep">/</span>fat</nav>
+    </header>
+
+    <main class="page" id="main">
+      <h1>fat</h1>
+      <p class="lead">FAT12 filesystem driver</p>
+
+      <p class="definedin">Defined in: src/kernel/fat.c, src/kernel/fat.h</p>
+
+      <p>
+        Depends on <a href="x86.html">x86.h</a> (disk I/O) and <a href="kstring.html">kstring.h</a>
+        (name comparison/copying). Owns all on-disk and current-directory state as
+        file-scope statics &mdash; nothing here is reentrant, which is fine since the
+        kernel has exactly one execution context. See
+        <a href="../architecture.html#fat">architecture.html</a> for how this module models
+        the root directory and subdirectories as one abstraction, both for reading and
+        (since the write path was added) for writing.
+      </p>
+
+      <h2>Types</h2>
+      <dl class="params">
+        <dt>fat_dirent_t</dt>
+        <dd>
+          <code>{ char name[13]; uint8_t attr; uint16_t cluster; uint32_t size; }</code>
+          &mdash; a directory entry as handed to callers: <code>name</code> is already
+          formatted as a display string (e.g. <code>"KERNEL.BIN"</code>, no trailing
+          padding), <code>attr</code> is the raw FAT attribute byte (check
+          <code>attr &amp; FAT_ATTR_DIRECTORY</code>), <code>cluster</code> is the first
+          cluster of its contents, and <code>size</code> is only meaningful for files (FAT
+          stores 0 for directories; use cluster-chain traversal to size one of those).
+        </dd>
+        <dt>fat_visitor_t</dt>
+        <dd><code>int (*)(const fat_dirent_t *entry, void *ctx)</code> &mdash; return nonzero to stop iteration early (the returned value becomes <a href="#fn_list">fat_list_cwd</a>'s/the internal iterator's return value).</dd>
+        <dt>fat_sink_t</dt>
+        <dd><code>void (*)(const uint8_t *data, uint16_t len, void *ctx)</code> &mdash; called once per sector of file data read by <a href="#fn_readfile">fat_read_file</a>; <code>data</code> is not NUL-terminated and may contain any byte value.</dd>
+      </dl>
+
+      <div class="tabs-group">
+        <div class="tab-panel" data-tab="reference" data-tab-label="Reference">
+
+          <h2>Function summary</h2>
+          <table class="summary">
+            <tr><th>Function</th><th>Description</th></tr>
+            <tr><td><a href="#fn_init">int fat_init(uint8_t drive)</a></td><td>Read the BPB and FAT; must be called once before anything else.</td></tr>
+            <tr><td><a href="#fn_list">void fat_list_cwd(fat_visitor_t visitor, void *ctx)</a></td><td>Visit every entry in the current directory.</td></tr>
+            <tr><td><a href="#fn_cwd">void fat_get_cwd(char *out)</a></td><td>Write the current directory path.</td></tr>
+            <tr><td><a href="#fn_cd">int fat_change_dir(const char *path, const char **err_msg)</a></td><td>Change the current directory.</td></tr>
+            <tr><td><a href="#fn_findfile">int fat_find_file(const char *path, fat_dirent_t *out, const char **err_msg)</a></td><td>Resolve a path to a file.</td></tr>
+            <tr><td><a href="#fn_readfile">int fat_read_file(const fat_dirent_t *entry, fat_sink_t sink, void *ctx)</a></td><td>Stream a file's contents.</td></tr>
+            <tr><td><a href="#fn_mkdir">int fat_mkdir(const char *path, const char **err_msg)</a></td><td>Create an empty directory.</td></tr>
+            <tr><td><a href="#fn_createfile">int fat_create_file(const char *path, const char **err_msg)</a></td><td>Create an empty file if it doesn't already exist.</td></tr>
+            <tr><td><a href="#fn_writefile">int fat_write_file(const char *path, const uint8_t *data, uint32_t len, int append, const char **err_msg)</a></td><td>Overwrite or append a file's contents.</td></tr>
+            <tr><td><a href="#fn_remove">int fat_remove(const char *path, const char **err_msg)</a></td><td>Delete a file or empty directory.</td></tr>
+          </table>
+
+          <h2>Function detail</h2>
+
+          <section class="fndetail" id="fn_init">
+            <h3>int fat_init(uint8_t drive)</h3>
+            <p>
+              Call once, with the boot drive number the bootloader handed the kernel. Resets
+              the disk, asks the BIOS for real geometry via
+              <a href="x86.html#fn_params">x86_disk_params</a> (falling back to 18 sectors/track
+              and 2 heads &mdash; standard 1.44&nbsp;MB floppy values &mdash; if the BIOS reports
+              0 for either), reads the boot sector and parses the BPB fields it needs directly
+              by byte offset (bytes/sector at <code>0x0B</code>, sectors/cluster at
+              <code>0x0D</code>, reserved sectors at <code>0x0E</code>, FAT count at
+              <code>0x10</code>, root entries at <code>0x11</code>, sectors/FAT at
+              <code>0x16</code> &mdash; read as raw bytes rather than through a C struct, which
+              sidesteps any compiler padding/alignment surprises), derives the root directory
+              and data area locations, and caches up to 9 FAT sectors (this project's fixed
+              1.44&nbsp;MB floppy layout) in a static buffer.
+            </p>
+            <dl class="params">
+              <dt>drive</dt><dd>BIOS boot drive number.</dd>
+              <dt class="ret">Returns</dt><dd>1 on success; 0 if the boot sector or any FAT sector couldn't be read.</dd>
+            </dl>
+          </section>
+
+          <section class="fndetail" id="fn_list">
+            <h3>void fat_list_cwd(fat_visitor_t visitor, void *ctx)</h3>
+            <p>
+              Calls <code>visitor(entry, ctx)</code> for every real file/subdirectory entry in
+              the current directory &mdash; volume labels, long-filename fragments, deleted
+              entries, and <code>.</code>/<code>..</code> are filtered out before the visitor
+              ever sees them. <a href="shell.html#fn_ls">shell.c's cmd_ls</a> is the only caller.
+            </p>
+            <dl class="params">
+              <dt>visitor</dt><dd>Called once per entry; return nonzero to stop early.</dd>
+              <dt>ctx</dt><dd>Opaque pointer passed through to <code>visitor</code> unchanged.</dd>
+              <dt class="ret">Returns</dt><dd>Nothing.</dd>
+            </dl>
+          </section>
+
+          <section class="fndetail" id="fn_cwd">
+            <h3>void fat_get_cwd(char *out)</h3>
+            <p>Writes the current path (<code>"/"</code> at the root, <code>"/sub/dir"</code> otherwise) by joining the names on the internal directory stack. Used both for the <code>pwd</code> command and to build the shell's prompt.</p>
+            <dl class="params">
+              <dt>out</dt><dd>Destination buffer; must be large enough for 8 path levels of up to 12 characters each plus separators (104 bytes comfortably covers it).</dd>
+              <dt class="ret">Returns</dt><dd>Nothing.</dd>
+            </dl>
+          </section>
+
+          <section class="fndetail" id="fn_cd">
+            <h3>int fat_change_dir(const char *path, const char **err_msg)</h3>
+            <p>
+              Resolves <code>path</code> (absolute if it starts with <code>/</code>, otherwise
+              relative to the current directory) one <code>/</code>-separated component at a
+              time, against a <em>temporary copy</em> of the directory stack. Only if every
+              component resolves &mdash; and is actually a directory, and the stack doesn't
+              exceed its fixed 8-level depth &mdash; does it commit that copy back as the real
+              current directory. So a failing multi-component path like <code>cd a/b/nope</code>
+              leaves the shell exactly where it started, never partway into <code>a/b</code>.
+              <code>.</code> is a no-op; <code>..</code> pops a level (clamped at the root, so
+              it never underflows).
+            </p>
+            <dl class="params">
+              <dt>path</dt><dd>Absolute or relative path, <code>/</code>-separated.</dd>
+              <dt>err_msg</dt><dd>Out: set on failure to <code>"no such directory"</code>, <code>"not a directory"</code>, or <code>"path too deep"</code>.</dd>
+              <dt class="ret">Returns</dt><dd>1 on success; 0 on failure, with the current directory left unchanged.</dd>
+            </dl>
+          </section>
+
+          <section class="fndetail" id="fn_findfile">
+            <h3>int fat_find_file(const char *path, fat_dirent_t *out, const char **err_msg)</h3>
+            <p>
+              Walks <code>path</code> the same way as <a href="#fn_cd">fat_change_dir</a>, but
+              only the <em>last</em> component needs to exist (it's returned in
+              <code>*out</code> regardless of its type, then rejected with
+              <code>"is a directory"</code> if it turns out to be one); every earlier component
+              must still be a directory. <code>..</code> mid-path is deliberately
+              <strong>unsupported</strong> here (a distinct error message is returned) since
+              this function, unlike <code>fat_change_dir</code>, doesn't carry a directory-stack
+              copy around to pop.
+            </p>
+            <dl class="params">
+              <dt>path</dt><dd>Absolute or relative file path.</dd>
+              <dt>out</dt><dd>Out: the resolved entry, only written on success.</dd>
+              <dt>err_msg</dt><dd>Out: set on failure to <code>"no such file or directory"</code>, <code>"not a directory"</code>, <code>"is a directory"</code>, <code>"'..' is not supported in file paths"</code>, or <code>"no file specified"</code> (empty path).</dd>
+              <dt class="ret">Returns</dt><dd>1 on success; 0 on failure.</dd>
+            </dl>
+          </section>
+
+          <section class="fndetail" id="fn_readfile">
+            <h3>int fat_read_file(const fat_dirent_t *entry, fat_sink_t sink, void *ctx)</h3>
+            <p>
+              Walks <code>entry</code>'s cluster chain, calling <code>sink(data, len, ctx)</code>
+              once per sector read. <code>len</code> is capped at the file's remaining declared
+              size, so the last, possibly-partial sector of a file never hands back trailing
+              garbage past EOF. <a href="shell.html#fn_cat">shell.c's cmd_cat</a> is the only
+              caller, with a sink that re-inserts <code>\r</code> before each <code>\n</code>
+              for display.
+            </p>
+            <dl class="params">
+              <dt>entry</dt><dd>A file entry previously returned by <a href="#fn_findfile">fat_find_file</a> or <a href="#fn_list">fat_list_cwd</a>'s visitor.</dd>
+              <dt>sink</dt><dd>Called once per sector of data.</dd>
+              <dt>ctx</dt><dd>Opaque pointer passed through to <code>sink</code> unchanged.</dd>
+              <dt class="ret">Returns</dt><dd>1 on success; 0 if a sector read failed partway through.</dd>
+            </dl>
+          </section>
+
+          <section class="fndetail" id="fn_mkdir">
+            <h3>int fat_mkdir(const char *path, const char **err_msg)</h3>
+            <p>
+              Resolves every component but the last (which must not yet exist) via the same
+              directory-walking logic as <a href="#fn_cd">fat_change_dir</a>, allocates one
+              fresh cluster and zeroes it (an empty directory needs no <code>.</code>/
+              <code>..</code> entries, since the cwd stack is kept in memory rather than read
+              off disk &mdash; see <a href="../architecture.html#fat">architecture.html</a>),
+              then writes a new 32-byte directory entry pointing at it. If the parent is the
+              fixed-size root and has no free slot, this fails outright; a subdirectory parent
+              instead grows by chaining on one more cluster.
+            </p>
+            <dl class="params">
+              <dt>path</dt><dd>Absolute or relative path; only the final component is created.</dd>
+              <dt>err_msg</dt><dd>Out: set on failure to <code>"no such directory"</code>, <code>"not a directory"</code>, <code>"invalid name"</code>, <code>"already exists"</code>, <code>"directory full"</code> (root only), or <code>"disk full"</code>/<code>"disk error"</code>.</dd>
+              <dt class="ret">Returns</dt><dd>1 on success; 0 on failure.</dd>
+            </dl>
+          </section>
+
+          <section class="fndetail" id="fn_createfile">
+            <h3>int fat_create_file(const char *path, const char **err_msg)</h3>
+            <p>
+              <code>touch</code> semantics: if a file of that name already exists, succeeds as
+              a no-op without touching its contents; if a directory of that name exists, fails.
+              Otherwise writes a new zero-length, zero-cluster directory entry, the same way
+              <a href="#fn_mkdir">fat_mkdir</a> does except with no cluster to allocate.
+            </p>
+            <dl class="params">
+              <dt>path</dt><dd>Absolute or relative path.</dd>
+              <dt>err_msg</dt><dd>Out: set on failure to the same directory-resolution errors as <a href="#fn_mkdir">fat_mkdir</a>, plus <code>"is a directory"</code>.</dd>
+              <dt class="ret">Returns</dt><dd>1 on success (including the already-exists-as-a-file no-op); 0 on failure.</dd>
+            </dl>
+          </section>
+
+          <section class="fndetail" id="fn_writefile">
+            <h3>int fat_write_file(const char *path, const uint8_t *data, uint32_t len, int append, const char **err_msg)</h3>
+            <p>
+              The one function that handles all four combinations of "file exists or not" and
+              "overwrite or append". Overwriting an existing file frees its old cluster chain
+              first (<code>free_chain</code>) and reuses its existing directory-entry slot;
+              creating a new file finds or grows a free slot the same way
+              <a href="#fn_mkdir">fat_mkdir</a> does. Appending walks to the last cluster of the
+              existing chain, tops it up with a partial sector-granular write
+              (<code>partial_write_in_cluster</code>) before allocating any new clusters, so it
+              never wastes the tail of a partially-used cluster. The FAT is only flushed to disk
+              once, after every cluster change for this call has been made in the in-memory
+              copy, and the directory entry (cluster + size) is written last &mdash; so a write
+              that fails partway through never leaves a directory entry pointing at a
+              partially-updated chain.
+            </p>
+            <dl class="params">
+              <dt>path</dt><dd>Absolute or relative path; created if it doesn't exist.</dd>
+              <dt>data</dt><dd>Bytes to write; not required to be text or NUL-terminated.</dd>
+              <dt>len</dt><dd>Number of bytes in <code>data</code>.</dd>
+              <dt>append</dt><dd>0 to discard any previous contents first; nonzero to add <code>data</code> after them.</dd>
+              <dt>err_msg</dt><dd>Out: set on failure to <code>"is a directory"</code>, any of <a href="#fn_mkdir">fat_mkdir</a>'s directory-resolution errors, or <code>"disk full"</code>/<code>"disk error"</code>.</dd>
+              <dt class="ret">Returns</dt><dd>1 on success; 0 on failure (the directory entry is left as it was before the call).</dd>
+            </dl>
+          </section>
+
+          <section class="fndetail" id="fn_remove">
+            <h3>int fat_remove(const char *path, const char **err_msg)</h3>
+            <p>
+              Looks up the entry the same way <a href="#fn_findfile">fat_find_file</a> would,
+              but accepts directories too. A directory must be empty
+              (<code>dir_is_empty</code>, which stops at the first non-deleted, non-terminator
+              entry) and must not be the current directory or an ancestor of it on the cwd
+              stack &mdash; otherwise the shell would be left pointing at a cluster that's about
+              to be freed and potentially reallocated to something else. On success, the
+              entry's whole cluster chain is freed in the FAT and its directory-entry byte is
+              set to <code>0xE5</code> (the standard FAT "deleted" marker), exactly what
+              <code>scan_sector</code> already knows to skip.
+            </p>
+            <dl class="params">
+              <dt>path</dt><dd>Absolute or relative path to a file or empty directory.</dd>
+              <dt>err_msg</dt><dd>Out: set on failure to <code>"no such file or directory"</code>, <code>"directory is in use"</code>, <code>"directory not empty"</code>, or <code>"disk error"</code>.</dd>
+              <dt class="ret">Returns</dt><dd>1 on success; 0 on failure.</dd>
+            </dl>
+          </section>
+
+        </div>
+
+        <div class="tab-panel" data-tab="internals" data-tab-label="Internal helpers">
+          <h2>Internal helpers</h2>
+          <p>
+            <code>lba_to_chs</code> / <code>read_sector</code> / <code>write_sector</code> /
+            <code>cluster_to_lba</code> / <code>fat_next_cluster</code> &mdash; the low-level
+            disk primitives every public function sits on top of: LBA&rarr;CHS conversion using
+            the BIOS-reported geometry, a 3-retry sector read/write (resetting the controller
+            between attempts; <code>write_sector</code> is <code>read_sector</code>'s mirror
+            image, BIOS function <code>0x03</code> instead of <code>0x02</code>),
+            cluster-number&rarr;LBA conversion for the data area, and FAT12's packed
+            12-bits-per-entry chain lookup (<code>cluster + cluster/2</code> gives the byte
+            offset of a 16-bit read; odd clusters take the high nibble via <code>&gt;&gt; 4</code>,
+            even clusters take the low 12 bits via <code>&amp; 0x0FFF</code>).
+          </p>
+          <p id="fn_findchild">
+            <code>fat_format_name</code> / <code>scan_sector</code> / <code>fat_iterate_dir</code> /
+            <code>find_child</code> &mdash; <code>fat_format_name</code> turns an 11-byte padded
+            on-disk name into a displayable <code>"NAME.EXT"</code> string. <code>scan_sector</code>
+            parses one 512-byte sector's worth of 32-byte directory entries, filtering deleted
+            (<code>0xE5</code>), long-filename (attribute <code>0x0F</code>) and volume-label
+            entries, and stopping at the first all-zero entry (end of directory).
+            <code>fat_iterate_dir(cluster, ...)</code> is the one function that knows
+            <code>cluster == 0</code> means "walk the fixed root-directory sectors" and anything
+            else means "walk this cluster chain through the FAT" &mdash; every public
+            directory-reading function goes through it. <code>find_child</code> is
+            <code>fat_iterate_dir</code> plus a visitor that stops at the first
+            case-insensitive name match; it's what both <a href="#fn_cd">fat_change_dir</a> and
+            <a href="#fn_findfile">fat_find_file</a> use to look up one path component.
+          </p>
+          <p>
+            <code>fat_set_cluster</code> / <code>fat_alloc_cluster</code> / <code>free_chain</code> /
+            <code>fat_flush_fat</code> &mdash; the write-side mirror of
+            <code>fat_next_cluster</code>: <code>fat_set_cluster</code> packs a 12-bit value
+            into the same odd/even-nibble layout <code>fat_next_cluster</code> unpacks,
+            <code>fat_alloc_cluster</code> linear-scans for the first cluster whose FAT entry is
+            0 and immediately marks it end-of-chain so a second allocation can't claim it too,
+            <code>free_chain</code> walks a chain setting every entry back to 0, and
+            <code>fat_flush_fat</code> writes the in-memory FAT buffer back to <em>every</em>
+            on-disk FAT copy (not just the one cached at init), since real FAT12 keeps
+            <code>fat_count</code> redundant copies in sync.
+          </p>
+          <p>
+            <code>walk_dir_raw</code> / <code>dir_search_visitor</code> / <code>any_entry_visitor</code> /
+            <code>dir_is_empty</code> &mdash; <code>walk_dir_raw</code> is
+            <code>fat_iterate_dir</code>'s write-side counterpart: same root-vs-cluster-chain
+            dispatch, but the visitor sees every 32-byte slot's raw bytes and on-disk location
+            (sector LBA + byte offset) rather than a parsed <code>fat_dirent_t</code>, since
+            creating/deleting entries needs to write back to that exact spot.
+            <code>dir_search_visitor</code> finds an existing name match <em>and</em> the first
+            reusable slot (deleted or past-the-end) in one pass, which is what every
+            create-type function below is built on. <code>dir_is_empty</code> is
+            <code>walk_dir_raw</code> plus a visitor that stops at the first real entry.
+          </p>
+          <p>
+            <code>grow_dir_and_get_slot</code> / <code>write_chain</code> /
+            <code>partial_write_in_cluster</code> / <code>append_to_chain</code> &mdash;
+            <code>grow_dir_and_get_slot</code> chains a new zeroed cluster onto a (non-root)
+            directory that's out of free slots. <code>write_chain</code> allocates clusters one
+            at a time and fills them from a data buffer, used for both a fresh overwrite and
+            the tail end of an append. <code>partial_write_in_cluster</code> does a
+            read-modify-write of just the bytes at some byte offset within one cluster &mdash;
+            needed because an append's first write usually lands mid-cluster, not at a sector
+            boundary. <code>append_to_chain</code> composes the two: top up whatever space is
+            left in the file's last cluster via <code>partial_write_in_cluster</code>, then hand
+            any remainder to <code>write_chain</code> and link the two chains together.
+          </p>
+          <p>
+            <code>format_name_83</code> / <code>build_dirent_raw</code> /
+            <code>write_dirent_raw</code> / <code>resolve_parent</code> /
+            <code>prepare_create</code> &mdash; <code>format_name_83</code> is
+            <code>fat_format_name</code>'s inverse: validates and pads a user-typed
+            <code>"NAME"</code> or <code>"NAME.EXT"</code> into the 11-byte on-disk form,
+            rejecting anything that doesn't fit 8.3. <code>build_dirent_raw</code> /
+            <code>write_dirent_raw</code> assemble a 32-byte entry and write it to a known
+            location. <code>resolve_parent</code> is <code>fat_change_dir</code>'s path-walking
+            logic with the last component left unresolved (it's the name being created, so it
+            need not exist yet); <code>prepare_create</code> wraps that plus
+            <code>format_name_83</code> plus a <code>dir_search_visitor</code> pass into the one
+            call <a href="#fn_mkdir">fat_mkdir</a>, <a href="#fn_createfile">fat_create_file</a>
+            and <a href="#fn_writefile">fat_write_file</a> all start with.
+          </p>
+        </div>
+      </div>
+
+      <footer class="pagefoot">
+        GL1TCH OS &mdash; <a href="../index.html">docs</a> &middot; <a href="index.html">code reference</a>
+      </footer>
+    </main>
   </div>
-</header>
 
-<div class="page">
-
-  <nav class="modulebar screen-only">
-    <a href="index.html">Overview</a>
-    <a href="x86.html">x86</a>
-    <a href="kstring.html">kstring</a>
-    <a href="console.html">console</a>
-    <a href="keyboard.html">keyboard</a>
-    <a href="calc.html">calc</a>
-    <span class="current">fat</span>
-    <a href="shell.html">shell</a>
-    <a href="entry.html">entry / kmain</a>
-    <a href="../architecture.html">Architecture &#8599;</a>
-  </nav>
-
-  <p class="definedin">Defined in: src/kernel/fat.c, src/kernel/fat.h</p>
-
-  <p>
-    Depends on <a href="x86.html">x86.h</a> (disk I/O) and <a href="kstring.html">kstring.h</a>
-    (name comparison/copying). Owns all on-disk and current-directory state as
-    file-scope statics &mdash; nothing here is reentrant, which is fine since the
-    kernel has exactly one execution context. See
-    <a href="../architecture.html#fat">architecture.html</a> for how this module models
-    the root directory and subdirectories as one abstraction.
-  </p>
-
-  <h2>Function summary</h2>
-  <table class="summary">
-    <tr><th>Function</th><th>Description</th></tr>
-    <tr><td><a href="#fn_init">int fat_init(uint8_t drive)</a></td><td>Read the BPB and FAT; must be called once before anything else.</td></tr>
-    <tr><td><a href="#fn_list">void fat_list_cwd(fat_visitor_t visitor, void *ctx)</a></td><td>Visit every entry in the current directory.</td></tr>
-    <tr><td><a href="#fn_cwd">void fat_get_cwd(char *out)</a></td><td>Write the current directory path.</td></tr>
-    <tr><td><a href="#fn_cd">int fat_change_dir(const char *path, const char **err_msg)</a></td><td>Change the current directory.</td></tr>
-    <tr><td><a href="#fn_findfile">int fat_find_file(const char *path, fat_dirent_t *out, const char **err_msg)</a></td><td>Resolve a path to a file.</td></tr>
-    <tr><td><a href="#fn_readfile">int fat_read_file(const fat_dirent_t *entry, fat_sink_t sink, void *ctx)</a></td><td>Stream a file's contents.</td></tr>
-  </table>
-
-  <h2>Types</h2>
-  <dl class="params">
-    <dt>fat_dirent_t</dt>
-    <dd>
-      <code>{ char name[13]; uint8_t attr; uint16_t cluster; uint32_t size; }</code>
-      &mdash; a directory entry as handed to callers: <code>name</code> is already
-      formatted as a display string (e.g. <code>"KERNEL.BIN"</code>, no trailing
-      padding), <code>attr</code> is the raw FAT attribute byte (check
-      <code>attr &amp; FAT_ATTR_DIRECTORY</code>), <code>cluster</code> is the first
-      cluster of its contents, and <code>size</code> is only meaningful for files (FAT
-      stores 0 for directories; use cluster-chain traversal to size one of those).
-    </dd>
-    <dt>fat_visitor_t</dt>
-    <dd><code>int (*)(const fat_dirent_t *entry, void *ctx)</code> &mdash; return nonzero to stop iteration early (the returned value becomes <a href="#fn_list">fat_list_cwd</a>'s/the internal iterator's return value).</dd>
-    <dt>fat_sink_t</dt>
-    <dd><code>void (*)(const uint8_t *data, uint16_t len, void *ctx)</code> &mdash; called once per sector of file data read by <a href="#fn_readfile">fat_read_file</a>; <code>data</code> is not NUL-terminated and may contain any byte value.</dd>
-  </dl>
-
-  <h2>Function detail</h2>
-
-  <section class="fndetail" id="fn_init">
-    <h3>int fat_init(uint8_t drive)</h3>
-    <p>
-      Call once, with the boot drive number the bootloader handed the kernel. Resets
-      the disk, asks the BIOS for real geometry via
-      <a href="x86.html#fn_params">x86_disk_params</a> (falling back to 18 sectors/track
-      and 2 heads &mdash; standard 1.44&nbsp;MB floppy values &mdash; if the BIOS reports
-      0 for either), reads the boot sector and parses the BPB fields it needs directly
-      by byte offset (bytes/sector at <code>0x0B</code>, sectors/cluster at
-      <code>0x0D</code>, reserved sectors at <code>0x0E</code>, FAT count at
-      <code>0x10</code>, root entries at <code>0x11</code>, sectors/FAT at
-      <code>0x16</code> &mdash; read as raw bytes rather than through a C struct, which
-      sidesteps any compiler padding/alignment surprises), derives the root directory
-      and data area locations, and caches up to 9 FAT sectors (this project's fixed
-      1.44&nbsp;MB floppy layout) in a static buffer.
-    </p>
-    <dl class="params">
-      <dt>drive</dt><dd>BIOS boot drive number.</dd>
-      <dt class="ret">Returns</dt><dd>1 on success; 0 if the boot sector or any FAT sector couldn't be read.</dd>
-    </dl>
-  </section>
-
-  <section class="fndetail" id="fn_list">
-    <h3>void fat_list_cwd(fat_visitor_t visitor, void *ctx)</h3>
-    <p>
-      Calls <code>visitor(entry, ctx)</code> for every real file/subdirectory entry in
-      the current directory &mdash; volume labels, long-filename fragments, deleted
-      entries, and <code>.</code>/<code>..</code> are filtered out before the visitor
-      ever sees them. <a href="shell.html#fn_ls">shell.c's cmd_ls</a> is the only caller.
-    </p>
-    <dl class="params">
-      <dt>visitor</dt><dd>Called once per entry; return nonzero to stop early.</dd>
-      <dt>ctx</dt><dd>Opaque pointer passed through to <code>visitor</code> unchanged.</dd>
-      <dt class="ret">Returns</dt><dd>Nothing.</dd>
-    </dl>
-  </section>
-
-  <section class="fndetail" id="fn_cwd">
-    <h3>void fat_get_cwd(char *out)</h3>
-    <p>Writes the current path (<code>"/"</code> at the root, <code>"/sub/dir"</code> otherwise) by joining the names on the internal directory stack. Used both for the <code>pwd</code> command and to build the shell's prompt.</p>
-    <dl class="params">
-      <dt>out</dt><dd>Destination buffer; must be large enough for 8 path levels of up to 12 characters each plus separators (104 bytes comfortably covers it).</dd>
-      <dt class="ret">Returns</dt><dd>Nothing.</dd>
-    </dl>
-  </section>
-
-  <section class="fndetail" id="fn_cd">
-    <h3>int fat_change_dir(const char *path, const char **err_msg)</h3>
-    <p>
-      Resolves <code>path</code> (absolute if it starts with <code>/</code>, otherwise
-      relative to the current directory) one <code>/</code>-separated component at a
-      time, against a <em>temporary copy</em> of the directory stack. Only if every
-      component resolves &mdash; and is actually a directory, and the stack doesn't
-      exceed its fixed 8-level depth &mdash; does it commit that copy back as the real
-      current directory. So a failing multi-component path like <code>cd a/b/nope</code>
-      leaves the shell exactly where it started, never partway into <code>a/b</code>.
-      <code>.</code> is a no-op; <code>..</code> pops a level (clamped at the root, so
-      it never underflows).
-    </p>
-    <dl class="params">
-      <dt>path</dt><dd>Absolute or relative path, <code>/</code>-separated.</dd>
-      <dt>err_msg</dt><dd>Out: set on failure to <code>"no such directory"</code>, <code>"not a directory"</code>, or <code>"path too deep"</code>.</dd>
-      <dt class="ret">Returns</dt><dd>1 on success; 0 on failure, with the current directory left unchanged.</dd>
-    </dl>
-  </section>
-
-  <section class="fndetail" id="fn_findfile">
-    <h3>int fat_find_file(const char *path, fat_dirent_t *out, const char **err_msg)</h3>
-    <p>
-      Walks <code>path</code> the same way as <a href="#fn_cd">fat_change_dir</a>, but
-      only the <em>last</em> component needs to exist (it's returned in
-      <code>*out</code> regardless of its type, then rejected with
-      <code>"is a directory"</code> if it turns out to be one); every earlier component
-      must still be a directory. <code>..</code> mid-path is deliberately
-      <strong>unsupported</strong> here (a distinct error message is returned) since
-      this function, unlike <code>fat_change_dir</code>, doesn't carry a directory-stack
-      copy around to pop.
-    </p>
-    <dl class="params">
-      <dt>path</dt><dd>Absolute or relative file path.</dd>
-      <dt>out</dt><dd>Out: the resolved entry, only written on success.</dd>
-      <dt>err_msg</dt><dd>Out: set on failure to <code>"no such file or directory"</code>, <code>"not a directory"</code>, <code>"is a directory"</code>, <code>"'..' is not supported in file paths"</code>, or <code>"no file specified"</code> (empty path).</dd>
-      <dt class="ret">Returns</dt><dd>1 on success; 0 on failure.</dd>
-    </dl>
-  </section>
-
-  <section class="fndetail" id="fn_readfile">
-    <h3>int fat_read_file(const fat_dirent_t *entry, fat_sink_t sink, void *ctx)</h3>
-    <p>
-      Walks <code>entry</code>'s cluster chain, calling <code>sink(data, len, ctx)</code>
-      once per sector read. <code>len</code> is capped at the file's remaining declared
-      size, so the last, possibly-partial sector of a file never hands back trailing
-      garbage past EOF. <a href="shell.html#fn_cat">shell.c's cmd_cat</a> is the only
-      caller, with a sink that re-inserts <code>\r</code> before each <code>\n</code>
-      for display.
-    </p>
-    <dl class="params">
-      <dt>entry</dt><dd>A file entry previously returned by <a href="#fn_findfile">fat_find_file</a> or <a href="#fn_list">fat_list_cwd</a>'s visitor.</dd>
-      <dt>sink</dt><dd>Called once per sector of data.</dd>
-      <dt>ctx</dt><dd>Opaque pointer passed through to <code>sink</code> unchanged.</dd>
-      <dt class="ret">Returns</dt><dd>1 on success; 0 if a sector read failed partway through.</dd>
-    </dl>
-  </section>
-
-  <h2>Internal helpers</h2>
-  <p>
-    <code>lba_to_chs</code> / <code>read_sector</code> / <code>cluster_to_lba</code> /
-    <code>fat_next_cluster</code> &mdash; the low-level disk primitives every public
-    function sits on top of: LBA&rarr;CHS conversion using the BIOS-reported geometry, a
-    3-retry sector read (resetting the controller between attempts), cluster-number
-    &rarr;LBA conversion for the data area, and FAT12's packed 12-bits-per-entry chain
-    lookup (<code>cluster + cluster/2</code> gives the byte offset of a 16-bit read; odd
-    clusters take the high nibble via <code>&gt;&gt; 4</code>, even clusters take the
-    low 12 bits via <code>&amp; 0x0FFF</code>).
-  </p>
-  <p id="fn_findchild">
-    <code>fat_format_name</code> / <code>scan_sector</code> / <code>fat_iterate_dir</code> /
-    <code>find_child</code> &mdash; <code>fat_format_name</code> turns an 11-byte padded
-    on-disk name into a displayable <code>"NAME.EXT"</code> string. <code>scan_sector</code>
-    parses one 512-byte sector's worth of 32-byte directory entries, filtering deleted
-    (<code>0xE5</code>), long-filename (attribute <code>0x0F</code>) and volume-label
-    entries, and stopping at the first all-zero entry (end of directory).
-    <code>fat_iterate_dir(cluster, ...)</code> is the one function that knows
-    <code>cluster == 0</code> means "walk the fixed root-directory sectors" and anything
-    else means "walk this cluster chain through the FAT" &mdash; every public
-    directory-reading function goes through it. <code>find_child</code> is
-    <code>fat_iterate_dir</code> plus a visitor that stops at the first
-    case-insensitive name match; it's what both <a href="#fn_cd">fat_change_dir</a> and
-    <a href="#fn_findfile">fat_find_file</a> use to look up one path component.
-  </p>
-
-  <footer class="pagefoot">
-    GL1TCH OS &mdash; <a href="../index.html">docs</a> &middot; <a href="index.html">code reference</a>
-  </footer>
+  <aside class="toc screen-only" id="toc">
+    <div class="toc-title">On this page</div>
+  </aside>
 
 </div>
+
+<script src="../assets/docs.js"></script>
 </body>
 </html>

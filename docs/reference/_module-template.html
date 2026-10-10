@@ -4,25 +4,34 @@
   How to document a new module (e.g. after adding src/kernel/foo.c + foo.h):
 
     1. Copy this file:  cp docs/reference/_module-template.html docs/reference/foo.html
-    2. Fill in every <!-- FILL: ... --> placeholder (then delete the comment markers).
+    2. Fill in every FILL: placeholder (then delete the comment markers).
     3. One row in the Function Summary table per PUBLIC function (declared in the
-       .h file), each linking to a matching #fn_<name> anchor below it.
+       .h file), each linking to a matching #fn_NAME-style anchor below it.
     4. One .fndetail block per public function: full description, a dl.params list
        of every parameter plus a "Returns" entry, and any caller/caveat notes.
-    5. If the module has internal (static) helpers worth knowing about, list them
-       tersely under "Internal helpers" - name + one or two sentences is enough,
-       no full param/returns treatment (they have no external contract to document).
+    5. If the module has internal (static) helpers worth knowing about, keep the
+       second .tab-panel (data-tab="internals") and list them tersely - name + one
+       or two sentences is enough, no full param/returns treatment (they have no
+       external contract to document). If it has none, delete that whole
+       .tab-panel: docs/assets/docs.js only renders a tab strip when a page has
+       2+ panels, so a module with no internals just shows the Reference content
+       directly, no empty "Internal helpers" tab.
     6. Add this module to the grid in docs/reference/index.html, AND to the
-       nav.modulebar list on *every* existing reference page (the nav bar is
-       duplicated per-page by design - like Javadoc's fixed top links - so it only
-       needs editing when the set of modules changes, not when a module's content
-       does).
+       sidebar nav that's repeated at the top of every page under docs/ (the
+       sidebar is duplicated per-page by design, like Javadoc's fixed top links,
+       so it only needs editing when the set of modules/reports changes, not
+       when a module's content does).
     7. Cross-link from docs/architecture.html if this module changes the module
        dependency graph described there.
 
   Keep each module's prose focused on WHY it's shaped the way it is, not just a
   restatement of the signature - the signature already says what types go in and
   out.
+
+  The "On this page" panel on the right is wired up automatically by
+  docs/assets/docs.js from the h2 headings below (Function summary / Function
+  detail / Internal helpers, inside whichever tab is open) - nothing to
+  hand-maintain there.
 -->
 <!doctype html>
 <html lang="en">
@@ -34,70 +43,110 @@
 </head>
 <body>
 
-<header class="banner">
-  <div class="inner">
-    <nav class="crumbs screen-only"><a href="../index.html">docs</a> / <a href="index.html">code reference</a> / <!-- FILL: module name --></nav>
-    <h1><!-- FILL: module name --></h1>
-    <div class="meta"><span><!-- FILL: one-sentence role, e.g. "FAT12 filesystem driver" --></span></div>
+<a class="skip-link" href="#main">Skip to content</a>
+
+<div class="shell">
+
+  <button class="sidebar-toggle screen-only" id="sidebarToggle" type="button" aria-label="Toggle navigation" aria-expanded="false">&#9776;</button>
+
+  <!-- Keep this sidebar identical across every page under docs/; only add/remove a
+       link when a module or report is added/removed entirely. Mark the current
+       page's link with class="nav-link sub current" instead of a plain href. -->
+  <aside class="sidebar screen-only" id="sidebar">
+    <div class="sidebar-brand"><a href="../index.html">GL1TCH OS</a><span class="ver">docs</span></div>
+    <nav class="sidebar-nav" aria-label="Documentation">
+      <div class="nav-group">
+        <a href="../index.html" class="nav-link">Overview</a>
+        <a href="../architecture.html" class="nav-link">Architecture</a>
+      </div>
+      <div class="nav-group">
+        <h4 class="nav-heading">Code reference</h4>
+        <a href="index.html" class="nav-link sub">Overview</a>
+        <a href="x86.html" class="nav-link sub">x86</a>
+        <a href="kstring.html" class="nav-link sub">kstring</a>
+        <a href="console.html" class="nav-link sub">console</a>
+        <a href="keyboard.html" class="nav-link sub">keyboard</a>
+        <a href="calc.html" class="nav-link sub">calc</a>
+        <a href="fat.html" class="nav-link sub">fat</a>
+        <a href="shell.html" class="nav-link sub">shell</a>
+        <a href="entry.html" class="nav-link sub">entry / kmain</a>
+        <!-- FILL: add a row here for the new module, with class="nav-link sub current" -->
+      </div>
+      <div class="nav-group">
+        <h4 class="nav-heading">Reports</h4>
+        <a href="../reports/2026-10-06-docker-fix-and-c-kernel-shell.html" class="nav-link sub">2026-10-06 &mdash; Docker fix + C shell</a>
+      </div>
+    </nav>
+    <button class="theme-toggle" id="themeToggle" type="button">
+      <span class="theme-icon">&#9790;</span><span class="theme-label">Dark mode</span>
+    </button>
+  </aside>
+
+  <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
+  <div class="content-col">
+    <header class="topbar screen-only">
+      <nav class="crumbs"><a href="../index.html">docs</a><span class="sep">/</span><a href="index.html">code reference</a><span class="sep">/</span><!-- FILL: module name --></nav>
+    </header>
+
+    <main class="page" id="main">
+      <h1><!-- FILL: module name --></h1>
+      <p class="lead"><!-- FILL: one-sentence role, e.g. "FAT12 filesystem driver" --></p>
+
+      <p class="definedin">Defined in: <!-- FILL: e.g. src/kernel/foo.c, src/kernel/foo.h --></p>
+
+      <p><!-- FILL: 2-4 sentences: what this module owns, and what it depends on (name the
+         other modules explicitly, e.g. "depends only on kstring.h" or "the only module
+         that touches hardware directly") --></p>
+
+      <div class="tabs-group">
+        <div class="tab-panel" data-tab="reference" data-tab-label="Reference">
+
+          <h2>Function summary</h2>
+          <table class="summary">
+            <tr><th>Function</th><th>Description</th></tr>
+            <tr>
+              <td><a href="#fn_example"><!-- FILL: return_type name(params) --></a></td>
+              <td><!-- FILL: one line --></td>
+            </tr>
+          </table>
+
+          <h2>Function detail</h2>
+
+          <section class="fndetail" id="fn_example">
+            <h3><!-- FILL: return_type name(params) --></h3>
+            <p><!-- FILL: full description - what it does, and why it's built this way --></p>
+            <dl class="params">
+              <dt><!-- FILL: param name --></dt>
+              <dd><!-- FILL: what it is / valid range / ownership --></dd>
+              <dt class="ret">Returns</dt>
+              <dd><!-- FILL --></dd>
+            </dl>
+          </section>
+
+        </div>
+
+        <div class="tab-panel" data-tab="internals" data-tab-label="Internal helpers">
+          <h2>Internal helpers</h2>
+          <p>
+            <code><!-- FILL: static_helper_name --></code> &mdash;
+            <!-- FILL: one or two sentences; no params/returns list needed -->
+          </p>
+        </div>
+      </div>
+
+      <footer class="pagefoot">
+        GL1TCH OS &mdash; <a href="../index.html">docs</a> &middot; <a href="index.html">code reference</a>
+      </footer>
+    </main>
   </div>
-</header>
 
-<div class="page">
-
-  <!-- Keep this nav identical across every docs/reference/*.html page; only add/remove a
-       link when a module is added/removed entirely. Mark the current page's link with
-       class="current" instead of href. -->
-  <nav class="modulebar screen-only">
-    <a href="index.html">Overview</a>
-    <a href="x86.html">x86</a>
-    <a href="kstring.html">kstring</a>
-    <a href="console.html">console</a>
-    <a href="keyboard.html">keyboard</a>
-    <a href="calc.html">calc</a>
-    <a href="fat.html">fat</a>
-    <a href="shell.html">shell</a>
-    <a href="entry.html">entry / kmain</a>
-    <a href="../architecture.html">Architecture &#8599;</a>
-  </nav>
-
-  <p class="definedin">Defined in: <!-- FILL: e.g. src/kernel/foo.c, src/kernel/foo.h --></p>
-
-  <p><!-- FILL: 2-4 sentences: what this module owns, and what it depends on (name the
-     other modules explicitly, e.g. "depends only on kstring.h" or "the only module
-     that touches hardware directly") --></p>
-
-  <h2>Function summary</h2>
-  <table class="summary">
-    <tr><th>Function</th><th>Description</th></tr>
-    <tr>
-      <td><a href="#fn_example"><!-- FILL: return_type name(params) --></a></td>
-      <td><!-- FILL: one line --></td>
-    </tr>
-  </table>
-
-  <h2>Function detail</h2>
-
-  <section class="fndetail" id="fn_example">
-    <h3><!-- FILL: return_type name(params) --></h3>
-    <p><!-- FILL: full description - what it does, and why it's built this way --></p>
-    <dl class="params">
-      <dt><!-- FILL: param name --></dt>
-      <dd><!-- FILL: what it is / valid range / ownership --></dd>
-      <dt class="ret">Returns</dt>
-      <dd><!-- FILL --></dd>
-    </dl>
-  </section>
-
-  <h2>Internal helpers</h2>
-  <p>
-    <code><!-- FILL: static_helper_name --></code> &mdash;
-    <!-- FILL: one or two sentences; no params/returns list needed -->
-  </p>
-
-  <footer class="pagefoot">
-    GL1TCH OS &mdash; <a href="../index.html">docs</a> &middot; <a href="index.html">code reference</a>
-  </footer>
+  <aside class="toc screen-only" id="toc">
+    <div class="toc-title">On this page</div>
+  </aside>
 
 </div>
+
+<script src="../assets/docs.js"></script>
 </body>
 </html>

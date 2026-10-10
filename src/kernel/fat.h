@@ -45,3 +45,34 @@ int _cdecl fat_find_file(const char *path, fat_dirent_t *out, const char **err_m
  */
 typedef void (_cdecl *fat_sink_t)(const uint8_t *data, uint16_t len, void *ctx);
 int _cdecl fat_read_file(const fat_dirent_t *entry, fat_sink_t sink, void *ctx);
+
+/*
+ * Creates an empty directory at path (relative or absolute). The parent
+ * directory must already exist. Returns 1 on success; on failure
+ * *err_msg is set.
+ */
+int _cdecl fat_mkdir(const char *path, const char **err_msg);
+
+/*
+ * Creates an empty file at path if it doesn't already exist. Succeeds
+ * as a no-op if a file of that name is already there. Returns 1 on
+ * success; on failure (e.g. a directory of that name exists) *err_msg
+ * is set.
+ */
+int _cdecl fat_create_file(const char *path, const char **err_msg);
+
+/*
+ * Writes len bytes from data to the file at path, creating it if
+ * necessary. If append is 0 the file's previous contents (if any) are
+ * discarded; if append is 1 the data is added after them. Returns 1 on
+ * success; on failure *err_msg is set.
+ */
+int _cdecl fat_write_file(const char *path, const uint8_t *data, uint32_t len,
+                          int append, const char **err_msg);
+
+/*
+ * Removes the file or empty directory at path. Returns 1 on success;
+ * on failure (no such entry, directory not empty, or directory is the
+ * current/an ancestor directory) *err_msg is set.
+ */
+int _cdecl fat_remove(const char *path, const char **err_msg);

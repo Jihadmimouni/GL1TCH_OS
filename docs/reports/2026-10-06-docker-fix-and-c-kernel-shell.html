@@ -8,153 +8,186 @@
 </head>
 <body>
 
-<header class="banner">
-  <div class="inner">
-    <nav class="crumbs screen-only"><a href="../index.html">docs</a> / reports</nav>
-    <h1>Docker build fix, and a C kernel shell with arithmetic + file explorer</h1>
-    <div class="meta">
-      <span>2026-10-06</span>
-      <span>Claude Opus 5.5 / Claude Sonnet 5, with Jihad Mimouni</span>
-    </div>
-  </div>
-</header>
+<a class="skip-link" href="#main">Skip to content</a>
 
-<div class="page">
+<div class="shell">
 
-  <h2>Summary</h2>
-  <p>
-    The Docker build was broken (Open Watcom's "Current-build" release asset had been
-    renamed, and the runtime image had a floppy-image permission/format problem) and
-    both are now fixed. On top of that, the kernel's placeholder "Hello world" assembly
-    stub was replaced with a small C kernel: a real interactive shell with a
-    recursive-descent arithmetic evaluator (<code>calc</code>) and a read-only FAT12
-    file explorer with Linux-like commands (<code>ls</code>, <code>cd</code>,
-    <code>pwd</code>, <code>cat</code>). It was built with the project's own Docker
-    toolchain and verified by actually booting it in QEMU and driving the shell.
-  </p>
+  <button class="sidebar-toggle screen-only" id="sidebarToggle" type="button" aria-label="Toggle navigation" aria-expanded="false">&#9776;</button>
 
-  <h2>What happened</h2>
+  <aside class="sidebar screen-only" id="sidebar">
+    <div class="sidebar-brand"><a href="../index.html">GL1TCH OS</a><span class="ver">docs</span></div>
+    <nav class="sidebar-nav" aria-label="Documentation">
+      <div class="nav-group">
+        <a href="../index.html" class="nav-link">Overview</a>
+        <a href="../architecture.html" class="nav-link">Architecture</a>
+      </div>
+      <div class="nav-group">
+        <h4 class="nav-heading">Code reference</h4>
+        <a href="../reference/index.html" class="nav-link sub">Overview</a>
+        <a href="../reference/x86.html" class="nav-link sub">x86</a>
+        <a href="../reference/kstring.html" class="nav-link sub">kstring</a>
+        <a href="../reference/console.html" class="nav-link sub">console</a>
+        <a href="../reference/keyboard.html" class="nav-link sub">keyboard</a>
+        <a href="../reference/calc.html" class="nav-link sub">calc</a>
+        <a href="../reference/fat.html" class="nav-link sub">fat</a>
+        <a href="../reference/shell.html" class="nav-link sub">shell</a>
+        <a href="../reference/entry.html" class="nav-link sub">entry / kmain</a>
+      </div>
+      <div class="nav-group">
+        <h4 class="nav-heading">Reports</h4>
+        <a href="2026-10-06-docker-fix-and-c-kernel-shell.html" class="nav-link sub current">2026-10-06 &mdash; Docker fix + C shell</a>
+      </div>
+    </nav>
+    <button class="theme-toggle" id="themeToggle" type="button">
+      <span class="theme-icon">&#9790;</span><span class="theme-label">Dark mode</span>
+    </button>
+  </aside>
 
-  <h3>1. Docker build: Open Watcom download 404</h3>
-  <p>
-    <code>docker build -t gl1tch-os .</code> failed at the Open Watcom step with
-    <code>curl: (22) The requested URL returned error: 404</code>. The Dockerfile hardcoded
-    <code>.../releases/download/Current-build/owsnapshot.tar.xz</code>, and that asset
-    name no longer matches what the release actually publishes.
-  </p>
-  <p>
-    Fix (<code>Dockerfile</code>): instead of hardcoding one filename, the build now asks
-    the GitHub API for the <code>Current-build</code> release's assets and picks the first
-    one matching <code>*snapshot*.tar.xz</code>, falling back to a guessed URL if that
-    lookup comes back empty, and printing the URL it chose. A
-    <code>--build-arg WATCOM_SNAPSHOT_URL=...</code> escape hatch is kept for pinning a
-    specific file.
-  </p>
+  <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
 
-  <h3>2. Docker run: permission denied and raw-format warning</h3>
-  <p>
-    After the image built, <code>docker run --rm -it gl1tch-os</code> failed with
-    <code>qemu-system-i386: Could not open '/os/main_floppy.img': Permission denied</code>,
-    plus a warning about QEMU guessing the image format. The floppy image was copied into
-    the runtime stage owned by <code>root</code>, but the container runs as the unprivileged
-    <code>gl1tch</code> user, and QEMU opens the floppy read-write.
-  </p>
-  <p>
-    Fix (<code>Dockerfile</code>): <code>COPY --chown=gl1tch:gl1tch</code> so the image file
-    is owned by the user that runs it, and the entrypoint now passes
-    <code>-drive file=...,format=raw,if=floppy</code> instead of the ambiguous
-    <code>-fda</code> flag, which removes the format-guessing warning and its associated
-    write restriction on block&nbsp;0.
-  </p>
+  <div class="content-col">
+    <header class="topbar screen-only">
+      <nav class="crumbs"><a href="../index.html">docs</a><span class="sep">/</span>reports<span class="sep">/</span>2026-10-06</nav>
+    </header>
 
-  <h3>3. Kernel rewrite: from an asm stub to a C shell</h3>
-  <p>
-    The previous kernel (<code>src/kernel/kernel.asm</code>) only printed a hello-world
-    string and halted. It was replaced with a small freestanding C kernel built with Open
-    Watcom (matching the 16-bit toolchain already used for stage2), wired up with a new
-    assembly entry point and BIOS glue:
-  </p>
-  <ul>
-    <li><code>entry.asm</code> &mdash; real-mode entry point stage2 jumps to; sets up
-      <code>ds</code>/<code>es</code>/<code>ss</code> and the stack, then calls
-      <code>kmain(boot_drive)</code>.</li>
-    <li><code>x86.asm</code> / <code>x86.h</code> &mdash; cdecl BIOS wrappers
-      (<code>putc</code>, <code>clear_screen</code>, <code>getkey</code>,
-      <code>reboot</code>, disk reset/params/CHS read) plus the 32-bit math runtime
-      helpers Open Watcom's 16-bit codegen calls into
-      (<code>__U4M</code>/<code>__I4M</code>/<code>__U4D</code>/<code>__I4D</code>),
-      which aren't provided since the build links no default library.</li>
-    <li><code>kstring.c</code> / <code>kstring.h</code> &mdash; freestanding
-      string/number helpers, deliberately <strong>not</strong> named
-      <code>memcpy</code>/<code>strlen</code>/etc., since Open Watcom recognizes those
-      names as compiler intrinsics and can emit calls with a different calling
-      convention than the cdecl one used here.</li>
-    <li><code>console.c</code>/<code>.h</code>, <code>keyboard.c</code>/<code>.h</code>
-      &mdash; character output and line-buffered keyboard input (handles backspace).</li>
-    <li><code>calc.c</code>/<code>.h</code> &mdash; the arithmetic evaluator: a
-      recursive-descent parser for <code>+ - * /</code>, parentheses, and unary minus,
-      over 32-bit integers, with usual operator precedence and a division-by-zero check.
-      This is exposed as the shell's <code>calc</code> command.</li>
-    <li><code>fat.c</code>/<code>.h</code> &mdash; a FAT12 driver: reads the BPB from the
-      boot sector at runtime (rather than hardcoding geometry), iterates the root
-      directory and subdirectory cluster chains, resolves <code>/</code>-separated paths
-      with <code>.</code>/<code>..</code> and absolute-path support, and reads file
-      contents. This backs the file explorer.</li>
-    <li><code>shell.c</code>/<code>.h</code> &mdash; the interactive command loop:
-      <code>help</code>, <code>ls</code>, <code>cd &lt;dir&gt;</code>, <code>pwd</code>,
-      <code>cat &lt;file&gt;</code>, <code>calc &lt;expr&gt;</code>,
-      <code>echo &lt;text&gt;</code>, <code>clear</code>/<code>cls</code>,
-      <code>reboot</code>.</li>
-    <li><code>kernel.c</code> &mdash; <code>kmain</code>: clears the screen, initializes
-      the FAT driver on the boot drive, and hands off to the shell.</li>
-    <li><code>src/kernel/makefile</code> &mdash; rewritten to compile the new
-      <code>*.c</code>/<code>*.asm</code> sources with Open Watcom, mirroring stage2's
-      existing build pattern.</li>
-  </ul>
+    <main class="page" id="main">
+      <h1>Docker build fix, and a C kernel shell with arithmetic + file explorer</h1>
+      <p class="lead">2026-10-06 &middot; Claude Opus 5.5 / Claude Sonnet 5, with Jihad Mimouni</p>
 
-  <h3>4. Build and boot-test methodology</h3>
-  <p>
-    The whole project was built using the repo's own Docker toolchain image (no sudo
-    needed &mdash; the system Docker socket at <code>/var/run/docker.sock</code> works
-    directly), run as the invoking user's uid/gid so build output stays usable outside
-    the container:
-  </p>
-  <pre><code>docker run --rm -u "$(id -u):$(id -g)" -v "$(pwd)":/build -w /build gl1tch-toolchain \
-    make BUILD_DIR=/build/build</code></pre>
-  <p>
-    The resulting <code>build/main_floppy.img</code> was booted headless in QEMU with a
-    monitor socket, then the shell was driven by sending real keystrokes through QEMU's
-    <code>sendkey</code> monitor command and reading the VGA text buffer directly out of
-    guest memory with <code>pmemsave 0xb8000 4000 ...</code> (80x25 text mode, 2 bytes per
-    cell) &mdash; a deterministic way to test a BIOS-console kernel without a serial port,
-    with no OCR or screenshots involved.
-  </p>
+      <h2>Summary</h2>
+      <p>
+        The Docker build was broken (Open Watcom's "Current-build" release asset had been
+        renamed, and the runtime image had a floppy-image permission/format problem) and
+        both are now fixed. On top of that, the kernel's placeholder "Hello world" assembly
+        stub was replaced with a small C kernel: a real interactive shell with a
+        recursive-descent arithmetic evaluator (<code>calc</code>) and a read-only FAT12
+        file explorer with Linux-like commands (<code>ls</code>, <code>cd</code>,
+        <code>pwd</code>, <code>cat</code>). It was built with the project's own Docker
+        toolchain and verified by actually booting it in QEMU and driving the shell.
+      </p>
 
-  <h2>Files touched</h2>
-  <table>
-    <tr><th>Path</th><th>Change</th></tr>
-    <tr><td><code>Dockerfile</code></td><td>Resolve the Watcom snapshot URL via the GitHub API with a fallback; <code>--chown</code> the floppy image; use an explicit raw drive spec.</td></tr>
-    <tr><td><code>src/kernel/kernel.asm</code></td><td>Removed (replaced by the C kernel).</td></tr>
-    <tr><td><code>src/kernel/entry.asm</code></td><td>New: real-mode entry point / stack setup / <code>kmain</code> call.</td></tr>
-    <tr><td><code>src/kernel/x86.asm</code>, <code>x86.h</code></td><td>New: BIOS wrappers + 32-bit math helpers.</td></tr>
-    <tr><td><code>src/kernel/kstring.c</code>, <code>kstring.h</code></td><td>New: freestanding string/number helpers.</td></tr>
-    <tr><td><code>src/kernel/console.c</code>, <code>console.h</code></td><td>New: character/number output.</td></tr>
-    <tr><td><code>src/kernel/keyboard.c</code>, <code>keyboard.h</code></td><td>New: line-buffered keyboard input.</td></tr>
-    <tr><td><code>src/kernel/calc.c</code>, <code>calc.h</code></td><td>New: arithmetic expression evaluator.</td></tr>
-    <tr><td><code>src/kernel/fat.c</code>, <code>fat.h</code></td><td>New: FAT12 read driver + path resolution.</td></tr>
-    <tr><td><code>src/kernel/shell.c</code>, <code>shell.h</code></td><td>New: interactive command shell.</td></tr>
-    <tr><td><code>src/kernel/kernel.c</code></td><td>New: <code>kmain</code> entry point.</td></tr>
-    <tr><td><code>src/kernel/stdint.h</code>, <code>linker.lnk</code></td><td>Copied over from stage2 (shared minimal typedefs / raw-binary link script).</td></tr>
-    <tr><td><code>src/kernel/makefile</code></td><td>Rewritten to build the new C/asm sources.</td></tr>
-    <tr><td><code>docs/</code></td><td>New: this report, the reusable template, and the PDF build script.</td></tr>
-  </table>
+      <h2>What happened</h2>
 
-  <h2>How it was verified</h2>
-  <p>
-    After one bug fix (below), the full command set was exercised in a live QEMU boot and
-    produced exactly the expected output:
-  </p>
-  <pre><code>GL1TCH:/&gt; calc 2+3*4
+      <h3>1. Docker build: Open Watcom download 404</h3>
+      <p>
+        <code>docker build -t gl1tch-os .</code> failed at the Open Watcom step with
+        <code>curl: (22) The requested URL returned error: 404</code>. The Dockerfile hardcoded
+        <code>.../releases/download/Current-build/owsnapshot.tar.xz</code>, and that asset
+        name no longer matches what the release actually publishes.
+      </p>
+      <p>
+        Fix (<code>Dockerfile</code>): instead of hardcoding one filename, the build now asks
+        the GitHub API for the <code>Current-build</code> release's assets and picks the first
+        one matching <code>*snapshot*.tar.xz</code>, falling back to a guessed URL if that
+        lookup comes back empty, and printing the URL it chose. A
+        <code>--build-arg WATCOM_SNAPSHOT_URL=...</code> escape hatch is kept for pinning a
+        specific file.
+      </p>
+
+      <h3>2. Docker run: permission denied and raw-format warning</h3>
+      <p>
+        After the image built, <code>docker run --rm -it gl1tch-os</code> failed with
+        <code>qemu-system-i386: Could not open '/os/main_floppy.img': Permission denied</code>,
+        plus a warning about QEMU guessing the image format. The floppy image was copied into
+        the runtime stage owned by <code>root</code>, but the container runs as the unprivileged
+        <code>gl1tch</code> user, and QEMU opens the floppy read-write.
+      </p>
+      <p>
+        Fix (<code>Dockerfile</code>): <code>COPY --chown=gl1tch:gl1tch</code> so the image file
+        is owned by the user that runs it, and the entrypoint now passes
+        <code>-drive file=...,format=raw,if=floppy</code> instead of the ambiguous
+        <code>-fda</code> flag, which removes the format-guessing warning and its associated
+        write restriction on block&nbsp;0.
+      </p>
+
+      <h3>3. Kernel rewrite: from an asm stub to a C shell</h3>
+      <p>
+        The previous kernel (<code>src/kernel/kernel.asm</code>) only printed a hello-world
+        string and halted. It was replaced with a small freestanding C kernel built with Open
+        Watcom (matching the 16-bit toolchain already used for stage2), wired up with a new
+        assembly entry point and BIOS glue:
+      </p>
+      <ul>
+        <li><code>entry.asm</code> &mdash; real-mode entry point stage2 jumps to; sets up
+          <code>ds</code>/<code>es</code>/<code>ss</code> and the stack, then calls
+          <code>kmain(boot_drive)</code>.</li>
+        <li><code>x86.asm</code> / <code>x86.h</code> &mdash; cdecl BIOS wrappers
+          (<code>putc</code>, <code>clear_screen</code>, <code>getkey</code>,
+          <code>reboot</code>, disk reset/params/CHS read) plus the 32-bit math runtime
+          helpers Open Watcom's 16-bit codegen calls into
+          (<code>__U4M</code>/<code>__I4M</code>/<code>__U4D</code>/<code>__I4D</code>),
+          which aren't provided since the build links no default library.</li>
+        <li><code>kstring.c</code> / <code>kstring.h</code> &mdash; freestanding
+          string/number helpers, deliberately <strong>not</strong> named
+          <code>memcpy</code>/<code>strlen</code>/etc., since Open Watcom recognizes those
+          names as compiler intrinsics and can emit calls with a different calling
+          convention than the cdecl one used here.</li>
+        <li><code>console.c</code>/<code>.h</code>, <code>keyboard.c</code>/<code>.h</code>
+          &mdash; character output and line-buffered keyboard input (handles backspace).</li>
+        <li><code>calc.c</code>/<code>.h</code> &mdash; the arithmetic evaluator: a
+          recursive-descent parser for <code>+ - * /</code>, parentheses, and unary minus,
+          over 32-bit integers, with usual operator precedence and a division-by-zero check.
+          This is exposed as the shell's <code>calc</code> command.</li>
+        <li><code>fat.c</code>/<code>.h</code> &mdash; a FAT12 driver: reads the BPB from the
+          boot sector at runtime (rather than hardcoding geometry), iterates the root
+          directory and subdirectory cluster chains, resolves <code>/</code>-separated paths
+          with <code>.</code>/<code>..</code> and absolute-path support, and reads file
+          contents. This backs the file explorer.</li>
+        <li><code>shell.c</code>/<code>.h</code> &mdash; the interactive command loop:
+          <code>help</code>, <code>ls</code>, <code>cd &lt;dir&gt;</code>, <code>pwd</code>,
+          <code>cat &lt;file&gt;</code>, <code>calc &lt;expr&gt;</code>,
+          <code>echo &lt;text&gt;</code>, <code>clear</code>/<code>cls</code>,
+          <code>reboot</code>.</li>
+        <li><code>kernel.c</code> &mdash; <code>kmain</code>: clears the screen, initializes
+          the FAT driver on the boot drive, and hands off to the shell.</li>
+        <li><code>src/kernel/makefile</code> &mdash; rewritten to compile the new
+          <code>*.c</code>/<code>*.asm</code> sources with Open Watcom, mirroring stage2's
+          existing build pattern.</li>
+      </ul>
+
+      <h3>4. Build and boot-test methodology</h3>
+      <p>
+        The whole project was built using the repo's own Docker toolchain image (no sudo
+        needed &mdash; the system Docker socket at <code>/var/run/docker.sock</code> works
+        directly), run as the invoking user's uid/gid so build output stays usable outside
+        the container:
+      </p>
+      <pre><code>docker run --rm -u "$(id -u):$(id -g)" -v "$(pwd)":/build -w /build gl1tch-toolchain \
+  make BUILD_DIR=/build/build</code></pre>
+      <p>
+        The resulting <code>build/main_floppy.img</code> was booted headless in QEMU with a
+        monitor socket, then the shell was driven by sending real keystrokes through QEMU's
+        <code>sendkey</code> monitor command and reading the VGA text buffer directly out of
+        guest memory with <code>pmemsave 0xb8000 4000 ...</code> (80x25 text mode, 2 bytes per
+        cell) &mdash; a deterministic way to test a BIOS-console kernel without a serial port,
+        with no OCR or screenshots involved.
+      </p>
+
+      <h2>Files touched</h2>
+      <table>
+        <tr><th>Path</th><th>Change</th></tr>
+        <tr><td><code>Dockerfile</code></td><td>Resolve the Watcom snapshot URL via the GitHub API with a fallback; <code>--chown</code> the floppy image; use an explicit raw drive spec.</td></tr>
+        <tr><td><code>src/kernel/kernel.asm</code></td><td>Removed (replaced by the C kernel).</td></tr>
+        <tr><td><code>src/kernel/entry.asm</code></td><td>New: real-mode entry point / stack setup / <code>kmain</code> call.</td></tr>
+        <tr><td><code>src/kernel/x86.asm</code>, <code>x86.h</code></td><td>New: BIOS wrappers + 32-bit math helpers.</td></tr>
+        <tr><td><code>src/kernel/kstring.c</code>, <code>kstring.h</code></td><td>New: freestanding string/number helpers.</td></tr>
+        <tr><td><code>src/kernel/console.c</code>, <code>console.h</code></td><td>New: character/number output.</td></tr>
+        <tr><td><code>src/kernel/keyboard.c</code>, <code>keyboard.h</code></td><td>New: line-buffered keyboard input.</td></tr>
+        <tr><td><code>src/kernel/calc.c</code>, <code>calc.h</code></td><td>New: arithmetic expression evaluator.</td></tr>
+        <tr><td><code>src/kernel/fat.c</code>, <code>fat.h</code></td><td>New: FAT12 read driver + path resolution.</td></tr>
+        <tr><td><code>src/kernel/shell.c</code>, <code>shell.h</code></td><td>New: interactive command shell.</td></tr>
+        <tr><td><code>src/kernel/kernel.c</code></td><td>New: <code>kmain</code> entry point.</td></tr>
+        <tr><td><code>src/kernel/stdint.h</code>, <code>linker.lnk</code></td><td>Copied over from stage2 (shared minimal typedefs / raw-binary link script).</td></tr>
+        <tr><td><code>src/kernel/makefile</code></td><td>Rewritten to build the new C/asm sources.</td></tr>
+        <tr><td><code>docs/</code></td><td>New: this report, the reusable template, and the PDF build script.</td></tr>
+      </table>
+
+      <h2>How it was verified</h2>
+      <p>
+        After one bug fix (below), the full command set was exercised in a live QEMU boot and
+        produced exactly the expected output:
+      </p>
+      <pre><code>GL1TCH:/&gt; calc 2+3*4
 14
 GL1TCH:/&gt; calc 7-2
 5
@@ -178,47 +211,56 @@ GL1TCH:/&gt; cat missing.txt
 cat: no such file or directory
 GL1TCH:/&gt; echo testing 123
 testing 123</code></pre>
-  <p>
-    <span class="tag fixed">bug found &amp; fixed</span>
-    <code>calc</code> and <code>echo</code> initially printed a "usage" error for every
-    input. Cause: the shell's tokenizer splits the input line into arguments by
-    overwriting each space with a NUL <em>in place</em>, but <code>calc</code>/
-    <code>echo</code> need the original free-form remainder of the line (an expression or
-    text that may itself contain spaces), and that remainder was being read from the
-    already-tokenized (and thus truncated-at-the-first-space) buffer. Fixed in
-    <code>shell.c</code> by snapshotting the raw line into a second buffer before
-    tokenizing, and reading the free-form remainder from that untouched copy.
-  </p>
-  <p>
-    Operator precedence (<code>2+3*4</code> &rarr; <code>14</code>, not <code>20</code>),
-    division-by-zero detection, directory/file error messages, and the FAT12 directory
-    listing (correct names and byte sizes for every file actually on the built floppy)
-    were all confirmed against real BIOS/QEMU behavior, not just read from the source.
-  </p>
+      <p>
+        <span class="tag fixed">bug found &amp; fixed</span>
+        <code>calc</code> and <code>echo</code> initially printed a "usage" error for every
+        input. Cause: the shell's tokenizer splits the input line into arguments by
+        overwriting each space with a NUL <em>in place</em>, but <code>calc</code>/
+        <code>echo</code> need the original free-form remainder of the line (an expression or
+        text that may itself contain spaces), and that remainder was being read from the
+        already-tokenized (and thus truncated-at-the-first-space) buffer. Fixed in
+        <code>shell.c</code> by snapshotting the raw line into a second buffer before
+        tokenizing, and reading the free-form remainder from that untouched copy.
+      </p>
+      <p>
+        Operator precedence (<code>2+3*4</code> &rarr; <code>14</code>, not <code>20</code>),
+        division-by-zero detection, directory/file error messages, and the FAT12 directory
+        listing (correct names and byte sizes for every file actually on the built floppy)
+        were all confirmed against real BIOS/QEMU behavior, not just read from the source.
+      </p>
 
-  <h2>Known limitations / follow-ups</h2>
-  <ul>
-    <li>The file explorer is read-only: there's no <code>mkdir</code>, <code>touch</code>,
-      <code>rm</code>, or write support. Adding writes means allocating free clusters and
-      updating both FAT copies and the directory entry, which is meaningfully more
-      involved than reading.</li>
-    <li><code>cat</code> prints raw file bytes with <code>\n</code> normalized to
-      <code>\r\n</code>; it's meant for text files, not binaries.</li>
-    <li><code>fat_find_file</code> doesn't support <code>..</code> inside a file path
-      (only <code>cd</code> does); it reports a clear error instead of silently
-      misresolving.</li>
-    <li>The FAT12 driver reads the BPB at runtime rather than hardcoding geometry, but
-      still assumes 512-byte sectors and caches at most 9 FAT sectors, matching this
-      project's fixed <code>mkfs.fat -F12</code> 1.44&nbsp;MB floppy layout &mdash; it
-      isn't a general-purpose FAT12 implementation.</li>
-    <li><code>calc</code> works in 32-bit signed integers only (no floating point, no
-      overflow detection).</li>
-  </ul>
+      <h2>Known limitations / follow-ups</h2>
+      <ul>
+        <li>The file explorer was read-only at the time of this report: no <code>mkdir</code>,
+          <code>touch</code>, <code>rm</code>, or write support. (Since fixed &mdash; see
+          <a href="../reference/fat.html">the fat reference page</a> for
+          <code>fat_mkdir</code>/<code>fat_create_file</code>/<code>fat_write_file</code>/
+          <code>fat_remove</code>.)</li>
+        <li><code>cat</code> prints raw file bytes with <code>\n</code> normalized to
+          <code>\r\n</code>; it's meant for text files, not binaries.</li>
+        <li><code>fat_find_file</code> doesn't support <code>..</code> inside a file path
+          (only <code>cd</code> does); it reports a clear error instead of silently
+          misresolving.</li>
+        <li>The FAT12 driver reads the BPB at runtime rather than hardcoding geometry, but
+          still assumes 512-byte sectors and caches at most 9 FAT sectors, matching this
+          project's fixed <code>mkfs.fat -F12</code> 1.44&nbsp;MB floppy layout &mdash; it
+          isn't a general-purpose FAT12 implementation.</li>
+        <li><code>calc</code> works in 32-bit signed integers only (no floating point, no
+          overflow detection).</li>
+      </ul>
 
-  <footer class="pagefoot">
-    GL1TCH OS &mdash; <a href="../index.html">back to docs index</a>
-  </footer>
+      <footer class="pagefoot">
+        GL1TCH OS &mdash; <a href="../index.html">docs</a> &middot; <a href="../reference/index.html">code reference</a>
+      </footer>
+    </main>
+  </div>
+
+  <aside class="toc screen-only" id="toc">
+    <div class="toc-title">On this page</div>
+  </aside>
 
 </div>
+
+<script src="../assets/docs.js"></script>
 </body>
 </html>

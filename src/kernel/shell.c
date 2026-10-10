@@ -87,6 +87,79 @@ static void _cdecl cmd_cat(const char *arg) {
     con_puts("\r\n");
 }
 
+static void _cdecl cmd_mkdir(const char *arg) {
+    const char *err;
+    if (arg[0] == '\0') {
+        con_puts("usage: mkdir <directory>\r\n");
+        return;
+    }
+    if (!fat_mkdir(arg, &err)) {
+        con_puts("mkdir: ");
+        con_puts(err);
+        con_puts("\r\n");
+    }
+}
+
+static void _cdecl cmd_touch(const char *arg) {
+    const char *err;
+    if (arg[0] == '\0') {
+        con_puts("usage: touch <file>\r\n");
+        return;
+    }
+    if (!fat_create_file(arg, &err)) {
+        con_puts("touch: ");
+        con_puts(err);
+        con_puts("\r\n");
+    }
+}
+
+static void _cdecl cmd_rm(const char *arg) {
+    const char *err;
+    if (arg[0] == '\0') {
+        con_puts("usage: rm <file|directory>\r\n");
+        return;
+    }
+    if (!fat_remove(arg, &err)) {
+        con_puts("rm: ");
+        con_puts(err);
+        con_puts("\r\n");
+    }
+}
+
+/* args is the remainder of the line after "write"/"append" (from
+ * rest_after_first_token); splits it in place into a filename and the
+ * text to write. */
+static void _cdecl cmd_write_or_append(char *args, int append) {
+    char *filename = args;
+    char *text;
+    const char *err;
+
+    while (*filename == ' ') {
+        filename++;
+    }
+    if (*filename == '\0') {
+        con_puts(append ? "usage: append <file> <text>\r\n" : "usage: write <file> <text>\r\n");
+        return;
+    }
+
+    text = filename;
+    while (*text != '\0' && *text != ' ') {
+        text++;
+    }
+    if (*text == ' ') {
+        *text++ = '\0';
+    }
+    while (*text == ' ') {
+        text++;
+    }
+
+    if (!fat_write_file(filename, (const uint8_t *)text, (uint32_t)str_len(text), append, &err)) {
+        con_puts(append ? "append: " : "write: ");
+        con_puts(err);
+        con_puts("\r\n");
+    }
+}
+
 static void _cdecl cmd_calc(const char *arg) {
     int32_t result;
     const char *err;
@@ -112,6 +185,11 @@ static void _cdecl cmd_help(void) {
     con_puts("  cd <dir>        change directory (supports .. and /abs/paths)\r\n");
     con_puts("  pwd             print the current directory\r\n");
     con_puts("  cat <file>      print a file's contents\r\n");
+    con_puts("  mkdir <dir>     create a directory\r\n");
+    con_puts("  touch <file>    create an empty file\r\n");
+    con_puts("  write <f> <t>   write text to a file (overwrites it)\r\n");
+    con_puts("  append <f> <t>  append text to a file\r\n");
+    con_puts("  rm <f|dir>      remove a file or empty directory\r\n");
     con_puts("  calc <expr>     evaluate an arithmetic expression\r\n");
     con_puts("  echo <text>     print text back\r\n");
     con_puts("  clear           clear the screen\r\n");
@@ -196,6 +274,16 @@ void _cdecl shell_run(void) {
             cmd_cd(argc > 1 ? argv[1] : "");
         } else if (str_cmp(argv[0], "cat") == 0) {
             cmd_cat(argc > 1 ? argv[1] : "");
+        } else if (str_cmp(argv[0], "mkdir") == 0) {
+            cmd_mkdir(argc > 1 ? argv[1] : "");
+        } else if (str_cmp(argv[0], "touch") == 0) {
+            cmd_touch(argc > 1 ? argv[1] : "");
+        } else if (str_cmp(argv[0], "rm") == 0) {
+            cmd_rm(argc > 1 ? argv[1] : "");
+        } else if (str_cmp(argv[0], "write") == 0) {
+            cmd_write_or_append(rest_after_first_token(raw), 0);
+        } else if (str_cmp(argv[0], "append") == 0) {
+            cmd_write_or_append(rest_after_first_token(raw), 1);
         } else if (str_cmp(argv[0], "calc") == 0) {
             cmd_calc(rest_after_first_token(raw));
         } else if (str_cmp(argv[0], "echo") == 0) {
@@ -209,6 +297,7 @@ void _cdecl shell_run(void) {
             con_puts("GL1TCH OS v1.0\r\n");
         } else if (str_cmp(argv[0], "rahma") == 0) {
             con_puts("Rahma is the best <3 <3 <3!\r\n");
+            con_puts("I love you sooooooooooooooooooooooooo much <3 <3 <3 <3 <3 <3 <3 <3 <3\r\n");
         } else {
             con_puts("Unknown command: ");
             con_puts(argv[0]);

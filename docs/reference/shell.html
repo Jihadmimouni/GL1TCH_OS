@@ -8,110 +8,159 @@
 </head>
 <body>
 
-<header class="banner">
-  <div class="inner">
-    <nav class="crumbs screen-only"><a href="../index.html">docs</a> / <a href="index.html">code reference</a> / shell</nav>
-    <h1>shell</h1>
-    <div class="meta"><span>The interactive command shell</span></div>
+<a class="skip-link" href="#main">Skip to content</a>
+
+<div class="shell">
+
+  <button class="sidebar-toggle screen-only" id="sidebarToggle" type="button" aria-label="Toggle navigation" aria-expanded="false">&#9776;</button>
+
+  <aside class="sidebar screen-only" id="sidebar">
+    <div class="sidebar-brand"><a href="../index.html">GL1TCH OS</a><span class="ver">docs</span></div>
+    <nav class="sidebar-nav" aria-label="Documentation">
+      <div class="nav-group">
+        <a href="../index.html" class="nav-link">Overview</a>
+        <a href="../architecture.html" class="nav-link">Architecture</a>
+      </div>
+      <div class="nav-group">
+        <h4 class="nav-heading">Code reference</h4>
+        <a href="index.html" class="nav-link sub">Overview</a>
+        <a href="x86.html" class="nav-link sub">x86</a>
+        <a href="kstring.html" class="nav-link sub">kstring</a>
+        <a href="console.html" class="nav-link sub">console</a>
+        <a href="keyboard.html" class="nav-link sub">keyboard</a>
+        <a href="calc.html" class="nav-link sub">calc</a>
+        <a href="fat.html" class="nav-link sub">fat</a>
+        <a href="shell.html" class="nav-link sub current">shell</a>
+        <a href="entry.html" class="nav-link sub">entry / kmain</a>
+      </div>
+      <div class="nav-group">
+        <h4 class="nav-heading">Reports</h4>
+        <a href="../reports/2026-10-06-docker-fix-and-c-kernel-shell.html" class="nav-link sub">2026-10-06 &mdash; Docker fix + C shell</a>
+      </div>
+    </nav>
+    <button class="theme-toggle" id="themeToggle" type="button">
+      <span class="theme-icon">&#9790;</span><span class="theme-label">Dark mode</span>
+    </button>
+  </aside>
+
+  <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
+  <div class="content-col">
+    <header class="topbar screen-only">
+      <nav class="crumbs"><a href="../index.html">docs</a><span class="sep">/</span><a href="index.html">code reference</a><span class="sep">/</span>shell</nav>
+    </header>
+
+    <main class="page" id="main">
+      <h1>shell</h1>
+      <p class="lead">The interactive command shell</p>
+
+      <p class="definedin">Defined in: src/kernel/shell.c, src/kernel/shell.h</p>
+
+      <p>
+        The only module that depends on all the others. Intentionally "dumb": read a line,
+        split it into words, match the first word against a fixed command table. All real
+        behavior lives in whichever module owns the relevant state &mdash;
+        <a href="fat.html">fat.c</a> for <code>ls</code>/<code>cd</code>/<code>pwd</code>/
+        <code>cat</code>/<code>mkdir</code>/<code>touch</code>/<code>write</code>/
+        <code>append</code>/<code>rm</code>, <a href="calc.html">calc.c</a> for
+        <code>calc</code>.
+      </p>
+
+      <div class="tabs-group">
+        <div class="tab-panel" data-tab="reference" data-tab-label="Reference">
+
+          <h2>Function summary</h2>
+          <table class="summary">
+            <tr><th>Function</th><th>Description</th></tr>
+            <tr><td><a href="#fn_run">void shell_run(void)</a></td><td>Run the interactive command loop. Never returns.</td></tr>
+          </table>
+
+          <h2>Function detail</h2>
+
+          <section class="fndetail" id="fn_run">
+            <h3>void shell_run(void)</h3>
+            <p>
+              The only public function in this module &mdash; an infinite loop that prints the
+              prompt (<code>GL1TCH:</code> + <a href="fat.html#fn_cwd">fat_get_cwd</a> +
+              <code>&gt; </code>), reads a line via
+              <a href="keyboard.html#fn_readline">read_line</a>, and dispatches it to one of the
+              command handlers below based on the first word.
+            </p>
+            <dl class="params"><dt class="ret">Returns</dt><dd>Never returns.</dd></dl>
+          </section>
+
+          <h2>Commands</h2>
+          <table class="summary">
+            <tr><th>Command</th><th>Handler</th><th>Description</th></tr>
+            <tr><td><code>help</code></td><td><code>cmd_help</code></td><td>Lists every command.</td></tr>
+            <tr><td><code>ls</code></td><td><code>cmd_ls</code></td><td>Lists the current directory via <a href="fat.html#fn_list">fat_list_cwd</a>.</td></tr>
+            <tr><td><code>cd &lt;dir&gt;</code></td><td><code>cmd_cd</code></td><td>Forwards to <a href="fat.html#fn_cd">fat_change_dir</a>.</td></tr>
+            <tr><td><code>pwd</code></td><td><code>cmd_pwd</code></td><td><a href="fat.html#fn_cwd">fat_get_cwd</a> plus a newline.</td></tr>
+            <tr><td><code>cat &lt;file&gt;</code></td><td><code>cmd_cat</code></td><td><a href="fat.html#fn_findfile">fat_find_file</a> then <a href="fat.html#fn_readfile">fat_read_file</a>.</td></tr>
+            <tr><td><code>mkdir &lt;dir&gt;</code></td><td><code>cmd_mkdir</code></td><td>Forwards to <a href="fat.html#fn_mkdir">fat_mkdir</a>.</td></tr>
+            <tr><td><code>touch &lt;file&gt;</code></td><td><code>cmd_touch</code></td><td>Forwards to <a href="fat.html#fn_createfile">fat_create_file</a>.</td></tr>
+            <tr><td><code>write &lt;file&gt; &lt;text&gt;</code></td><td><code>cmd_write_or_append</code></td><td><a href="fat.html#fn_writefile">fat_write_file</a> with <code>append = 0</code>.</td></tr>
+            <tr><td><code>append &lt;file&gt; &lt;text&gt;</code></td><td><code>cmd_write_or_append</code></td><td><a href="fat.html#fn_writefile">fat_write_file</a> with <code>append = 1</code>.</td></tr>
+            <tr><td><code>rm &lt;file|dir&gt;</code></td><td><code>cmd_rm</code></td><td>Forwards to <a href="fat.html#fn_remove">fat_remove</a>.</td></tr>
+            <tr><td><code>calc &lt;expr&gt;</code></td><td><code>cmd_calc</code></td><td>Forwards to <a href="calc.html#fn_eval">calc_eval</a>.</td></tr>
+            <tr><td><code>echo &lt;text&gt;</code></td><td>(inline)</td><td>Prints the rest of the line back.</td></tr>
+            <tr><td><code>clear</code> / <code>cls</code></td><td>(inline)</td><td><a href="x86.html#fn_clear">x86_clear_screen</a>.</td></tr>
+            <tr><td><code>reboot</code></td><td>(inline)</td><td><a href="x86.html#fn_reboot">x86_reboot</a>.</td></tr>
+          </table>
+
+        </div>
+
+        <div class="tab-panel" data-tab="internals" data-tab-label="Internal helpers">
+          <h2>Internal helpers</h2>
+
+          <p id="fn_ls"><code>cmd_ls</code> / <code>ls_visitor</code> &mdash; prints <code>&lt;DIR&gt;</code> or a right-padded byte size for each entry from <a href="fat.html#fn_list">fat_list_cwd</a>.</p>
+
+          <p><code>cmd_pwd</code>, <code>cmd_cd</code>, <code>cmd_mkdir</code>, <code>cmd_touch</code>, <code>cmd_rm</code> &mdash; thin wrappers that print a usage message when called with no argument, and the driver's error message on failure.</p>
+
+          <p id="fn_cat"><code>cmd_cat</code> / <code>cat_sink</code> &mdash; resolves the path via <a href="fat.html#fn_findfile">fat_find_file</a>, then reads it via <a href="fat.html#fn_readfile">fat_read_file</a> with a sink that writes each byte through <a href="console.html#fn_putc">con_putc</a>, inserting a <code>\r</code> before every <code>\n</code> so the file's line breaks render correctly on the BIOS console.</p>
+
+          <p id="fn_write"><code>cmd_write_or_append</code> &mdash; shared by <code>write</code> and <code>append</code>. Takes the untokenized remainder of the line (from <a href="#fn_rest">rest_after_first_token</a>), then does its own single-space split to pull the filename off the front, since <code>tokenize</code> would otherwise have also broken the free-form text apart on every space within it. Forwards to <a href="fat.html#fn_writefile">fat_write_file</a> with <code>append</code> set from which command was typed.</p>
+
+          <p><code>cmd_calc</code> &mdash; forwards to <a href="calc.html#fn_eval">calc_eval</a> and prints either the integer result or the error message.</p>
+
+          <p><code>cmd_help</code> &mdash; static text listing every command.</p>
+
+          <p>
+            <code>tokenize(char *line, char *argv[], int max_args)</code> &mdash; splits
+            <code>line</code> into words by overwriting each run of spaces with a single NUL
+            <strong>in place</strong>, recording a pointer to the start of each word in
+            <code>argv</code>. This mutation is exactly why <code>shell_run</code> keeps a
+            second, untouched copy of the line (<code>raw</code>) for commands that need their
+            original free-form remainder.
+          </p>
+
+          <p id="fn_rest">
+            <code>rest_after_first_token(char *line)</code> &mdash; skips the first
+            whitespace-delimited word, then any following spaces, and returns a pointer to
+            what's left: <code>calc</code>'s expression, <code>echo</code>'s text, and the
+            filename-plus-text that <a href="#fn_write">cmd_write_or_append</a> splits further
+            itself, all of which may contain spaces that <code>tokenize</code> would otherwise
+            have split on. <strong>Must</strong> be called on the untokenized <code>raw</code> copy
+            of the line, never on <code>line</code> after <code>tokenize</code> has run over it
+            &mdash; calling it on the tokenized buffer was exactly the bug described in
+            <a href="../reports/2026-10-06-docker-fix-and-c-kernel-shell.html">the 2026-10-06
+            report</a> (<code>calc</code>/<code>echo</code> always failing with a usage error).
+          </p>
+        </div>
+      </div>
+
+      <footer class="pagefoot">
+        GL1TCH OS &mdash; <a href="../index.html">docs</a> &middot; <a href="index.html">code reference</a>
+      </footer>
+    </main>
   </div>
-</header>
 
-<div class="page">
-
-  <nav class="modulebar screen-only">
-    <a href="index.html">Overview</a>
-    <a href="x86.html">x86</a>
-    <a href="kstring.html">kstring</a>
-    <a href="console.html">console</a>
-    <a href="keyboard.html">keyboard</a>
-    <a href="calc.html">calc</a>
-    <a href="fat.html">fat</a>
-    <span class="current">shell</span>
-    <a href="entry.html">entry / kmain</a>
-    <a href="../architecture.html">Architecture &#8599;</a>
-  </nav>
-
-  <p class="definedin">Defined in: src/kernel/shell.c, src/kernel/shell.h</p>
-
-  <p>
-    The only module that depends on all the others. Intentionally "dumb": read a line,
-    split it into words, match the first word against a fixed command table. All real
-    behavior lives in whichever module owns the relevant state &mdash;
-    <a href="fat.html">fat.c</a> for <code>ls</code>/<code>cd</code>/<code>pwd</code>/
-    <code>cat</code>, <a href="calc.html">calc.c</a> for <code>calc</code>.
-  </p>
-
-  <h2>Function summary</h2>
-  <table class="summary">
-    <tr><th>Function</th><th>Description</th></tr>
-    <tr><td><a href="#fn_run">void shell_run(void)</a></td><td>Run the interactive command loop. Never returns.</td></tr>
-  </table>
-
-  <h2>Function detail</h2>
-
-  <section class="fndetail" id="fn_run">
-    <h3>void shell_run(void)</h3>
-    <p>
-      The only public function in this module &mdash; an infinite loop that prints the
-      prompt (<code>GL1TCH:</code> + <a href="fat.html#fn_cwd">fat_get_cwd</a> +
-      <code>&gt; </code>), reads a line via
-      <a href="keyboard.html#fn_readline">read_line</a>, and dispatches it to one of the
-      command handlers below based on the first word.
-    </p>
-    <dl class="params"><dt class="ret">Returns</dt><dd>Never returns.</dd></dl>
-  </section>
-
-  <h2>Commands</h2>
-  <table class="summary">
-    <tr><th>Command</th><th>Handler</th><th>Description</th></tr>
-    <tr><td><code>help</code></td><td><code>cmd_help</code></td><td>Lists every command.</td></tr>
-    <tr><td><code>ls</code></td><td><code>cmd_ls</code></td><td>Lists the current directory via <a href="fat.html#fn_list">fat_list_cwd</a>.</td></tr>
-    <tr><td><code>cd &lt;dir&gt;</code></td><td><code>cmd_cd</code></td><td>Forwards to <a href="fat.html#fn_cd">fat_change_dir</a>.</td></tr>
-    <tr><td><code>pwd</code></td><td><code>cmd_pwd</code></td><td><a href="fat.html#fn_cwd">fat_get_cwd</a> plus a newline.</td></tr>
-    <tr><td><code>cat &lt;file&gt;</code></td><td><code>cmd_cat</code></td><td><a href="fat.html#fn_findfile">fat_find_file</a> then <a href="fat.html#fn_readfile">fat_read_file</a>.</td></tr>
-    <tr><td><code>calc &lt;expr&gt;</code></td><td><code>cmd_calc</code></td><td>Forwards to <a href="calc.html#fn_eval">calc_eval</a>.</td></tr>
-    <tr><td><code>echo &lt;text&gt;</code></td><td>(inline)</td><td>Prints the rest of the line back.</td></tr>
-    <tr><td><code>clear</code> / <code>cls</code></td><td>(inline)</td><td><a href="x86.html#fn_clear">x86_clear_screen</a>.</td></tr>
-    <tr><td><code>reboot</code></td><td>(inline)</td><td><a href="x86.html#fn_reboot">x86_reboot</a>.</td></tr>
-  </table>
-
-  <h2>Internal helpers</h2>
-
-  <p id="fn_ls"><code>cmd_ls</code> / <code>ls_visitor</code> &mdash; prints <code>&lt;DIR&gt;</code> or a right-padded byte size for each entry from <a href="fat.html#fn_list">fat_list_cwd</a>.</p>
-
-  <p><code>cmd_pwd</code>, <code>cmd_cd</code> &mdash; thin wrappers that print a usage message when called with no argument, and the driver's error message on failure.</p>
-
-  <p id="fn_cat"><code>cmd_cat</code> / <code>cat_sink</code> &mdash; resolves the path via <a href="fat.html#fn_findfile">fat_find_file</a>, then reads it via <a href="fat.html#fn_readfile">fat_read_file</a> with a sink that writes each byte through <a href="console.html#fn_putc">con_putc</a>, inserting a <code>\r</code> before every <code>\n</code> so the file's line breaks render correctly on the BIOS console.</p>
-
-  <p><code>cmd_calc</code> &mdash; forwards to <a href="calc.html#fn_eval">calc_eval</a> and prints either the integer result or the error message.</p>
-
-  <p><code>cmd_help</code> &mdash; static text listing every command.</p>
-
-  <p>
-    <code>tokenize(char *line, char *argv[], int max_args)</code> &mdash; splits
-    <code>line</code> into words by overwriting each run of spaces with a single NUL
-    <strong>in place</strong>, recording a pointer to the start of each word in
-    <code>argv</code>. This mutation is exactly why <code>shell_run</code> keeps a
-    second, untouched copy of the line (<code>raw</code>) for commands that need their
-    original free-form remainder.
-  </p>
-
-  <p>
-    <code>rest_after_first_token(char *line)</code> &mdash; skips the first
-    whitespace-delimited word, then any following spaces, and returns a pointer to
-    what's left: <code>calc</code>'s expression and <code>echo</code>'s text, both of
-    which may themselves contain spaces that <code>tokenize</code> would otherwise have
-    split on. <strong>Must</strong> be called on the untokenized <code>raw</code> copy
-    of the line, never on <code>line</code> after <code>tokenize</code> has run over it
-    &mdash; calling it on the tokenized buffer was exactly the bug described in
-    <a href="../reports/2026-10-06-docker-fix-and-c-kernel-shell.html">the 2026-10-06
-    report</a> (<code>calc</code>/<code>echo</code> always failing with a usage error).
-  </p>
-
-  <footer class="pagefoot">
-    GL1TCH OS &mdash; <a href="../index.html">docs</a> &middot; <a href="index.html">code reference</a>
-  </footer>
+  <aside class="toc screen-only" id="toc">
+    <div class="toc-title">On this page</div>
+  </aside>
 
 </div>
+
+<script src="../assets/docs.js"></script>
 </body>
 </html>

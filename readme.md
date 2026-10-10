@@ -7,6 +7,7 @@ GL1TCH OS is an exciting project in early development aimed at creating an opera
 ## Table of Contents
 
 - [Project Overview](#project-overview)
+- [What's left for a minimally functional OS](#whats-left-for-a-minimally-functional-os)
 - [Getting Involved](#getting-involved)
 - [Requirments](#Requirements)
 - [usage](#Steps-to-Start)
@@ -17,6 +18,47 @@ GL1TCH OS is an exciting project in early development aimed at creating an opera
 ## Project Overview
 
 GL1TCH OS is all about pushing the boundaries of what an operating system can do. It's being developed to provide a playground for experimenting with unique concepts, exploring system internals, and understanding the intricacies of OS development. Even though we're in the early stages of development, we're excited to invite you to join us on this journey.
+
+## What's left for a minimally functional OS
+
+Right now GL1TCH OS can boot, read/write a FAT12 filesystem, and run one
+built-in interactive shell with a handful of commands - but under the hood
+it's still a single monolithic real-mode program, not yet a real OS with
+the usual separation between kernel and programs. Rough checklist of what's
+actually missing before it's reasonably "minimally functional" (based on
+reading the current source, not a generic OS wishlist) - check items off as
+they land:
+
+**Architectural (blocking - everything else tends to need these first):**
+- [ ] **Memory manager.** There's no heap/allocator anywhere; every buffer in
+  the kernel is a fixed-size stack or static array. Needed before anything
+  below can deal with data whose size isn't known at compile time.
+- [ ] **Program loading.** There's no way to load and run a separate binary
+  from disk - every shell command is compiled straight into `kernel.bin`.
+  (`tools/hello.c`'s `hello1.bin`, copied onto the floppy as `::fat`, looks
+  like a leftover test artifact rather than an actual loader path.)
+- [ ] **Interrupt-driven timer and keyboard.** `read_line` blocks on a BIOS
+  `int 16h` poll; there's no IRQ0 timer tick and no custom IDT, so there's no
+  `sleep`, no preemption, and nothing can happen while waiting on a keypress.
+- [ ] **Multitasking**, even cooperative (no preemption needed yet) - right
+  now exactly one thing ever runs: the shell loop.
+- [ ] **Fault/panic handling.** Real mode has no hardware memory protection,
+  so a bad pointer just silently corrupts memory; there's no panic screen or
+  diagnostic dump, just `kmain`'s plain `cli; hlt` as the last resort.
+- [ ] **Protected mode / memory beyond 1MB.** Still pure 16-bit real mode, so
+  usable RAM is capped under 1MB no matter how much is actually installed.
+- [ ] **Booting from more than a 1.44MB floppy at LBA 0.** The FAT driver
+  assumes the boot drive *is* the whole filesystem, with no MBR/partition
+  table support, so it can't boot off a hard disk or USB image.
+
+**Smaller / non-blocking polish:**
+- [ ] `cp` / `mv` / `df`-equivalent shell commands.
+- [ ] Long filenames (currently 8.3 only) and real timestamps on
+  `mkdir`/`touch`/`write` - new FAT entries are written with zeroed dates.
+- [ ] Shell scripting - no `&&`, `;`, piping, or redirection; one command per
+  line only.
+- [ ] Clean up `src/bootloader/stage2/main.c`'s empty `cstart_` function -
+  looks unused.
 
 ## Getting Involved
 
