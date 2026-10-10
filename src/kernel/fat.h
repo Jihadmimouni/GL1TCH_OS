@@ -92,3 +92,10 @@ int _cdecl fat_write_file(const char *path, const uint8_t *data, uint32_t len,
  * current/an ancestor directory) *err_msg is set.
  */
 int _cdecl fat_remove(const char *path, const char **err_msg);
+
+/*
+ * Reports total and free space on the filesystem, in bytes, via
+ * *total_bytes/*free_bytes. Free space is computed by walking the FAT
+ * and counting unallocated clusters. Always succeeds (returns 1).
+ */
+int _cdecl fat_get_space(uint32_t *total_bytes, uint32_t *free_bytes);

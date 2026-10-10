@@ -1372,3 +1372,20 @@ int _cdecl fat_remove(const char *path, const char **err_msg) {
     }
     return 1;
 }
+
+int _cdecl fat_get_space(uint32_t *total_bytes, uint32_t *free_bytes) {
+    uint16_t c;
+    uint16_t limit = (uint16_t)(g_total_clusters + 2);
+    uint32_t free_clusters = 0;
+    uint32_t cluster_bytes = (uint32_t)g_sectors_per_cluster * g_bytes_per_sector;
+
+    for (c = 2; c < limit; c++) {
+        if (fat_next_cluster(c) == 0) {
+            free_clusters++;
+        }
+    }
+
+    *total_bytes = (uint32_t)g_total_clusters * cluster_bytes;
+    *free_bytes = free_clusters * cluster_bytes;
+    return 1;
+}

@@ -52,7 +52,7 @@ they land:
   table support, so it can't boot off a hard disk or USB image.
 
 **Smaller / non-blocking polish:**
-- [ ] `cp` / `mv` / `df`-equivalent shell commands.
+- [x] `cp` / `mv` / `df`-equivalent shell commands.
 - [x] Real timestamps on `mkdir`/`touch`/`write`. New FAT entries get
   CrtTime/CrtDate/LastAccessDate from the BIOS RTC (`x86_get_datetime`
   in `src/kernel/x86.asm`) instead of zeros, rewriting an existing
