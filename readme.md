@@ -57,7 +57,7 @@ they land:
   `mkdir`/`touch`/`write` - new FAT entries are written with zeroed dates.
 - [ ] Shell scripting - no `&&`, `;`, piping, or redirection; one command per
   line only.
-- [ ] Clean up `src/bootloader/stage2/main.c`'s empty `cstart_` function -
+- [x] Clean up `src/bootloader/stage2/main.c`'s empty `cstart_` function -
   looks unused.
 
 ## Getting Involved
