@@ -53,8 +53,21 @@ they land:
 
 **Smaller / non-blocking polish:**
 - [ ] `cp` / `mv` / `df`-equivalent shell commands.
-- [ ] Long filenames (currently 8.3 only) and real timestamps on
-  `mkdir`/`touch`/`write` - new FAT entries are written with zeroed dates.
+- [x] Real timestamps on `mkdir`/`touch`/`write`. New FAT entries get
+  CrtTime/CrtDate/LastAccessDate from the BIOS RTC (`x86_get_datetime`
+  in `src/kernel/x86.asm`) instead of zeros, rewriting an existing
+  file's entry refreshes WrtTime/WrtDate (CrtTime/CrtDate stay as they
+  were), and `ls` prints each entry's write date/time.
+- [ ] Long filenames (currently 8.3 only for anything this OS creates).
+  `ls` now *reads and displays* a real VFAT long name when one already
+  exists on disk (a checksum-validated chain of LFN entries, decoded in
+  `fat.c`'s `lfn_accumulate`/`lfn_ready`) - e.g. a file copied onto the
+  floppy with `mtools` shows its real name, not just `THISIS~1.TXT`.
+  What's *not* done, and deliberately left out as too risky to rush:
+  `mkdir`/`touch`/`write` still only ever create 8.3 short names (no LFN
+  entry generation, no `~1`-style collision handling), and
+  `cd`/`cat`/`rm`/`fat_find_file` still only match against the short
+  name, not the long one.
 - [ ] Shell scripting - no `&&`, `;`, piping, or redirection; one command per
   line only.
 - [x] Clean up `src/bootloader/stage2/main.c`'s empty `cstart_` function -
