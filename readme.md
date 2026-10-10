@@ -55,8 +55,18 @@ they land:
 - [ ] `cp` / `mv` / `df`-equivalent shell commands.
 - [ ] Long filenames (currently 8.3 only) and real timestamps on
   `mkdir`/`touch`/`write` - new FAT entries are written with zeroed dates.
-- [ ] Shell scripting - no `&&`, `;`, piping, or redirection; one command per
-  line only.
+- [x] Shell scripting - `shell.c` now supports `;` (sequential) and `&&`
+  (run-if-previous-succeeded) command chaining, and `>`/`>>` output
+  redirection to a file (via a console output-capture buffer feeding
+  `fat_write_file`). A single `|` pipe is also implemented, but kept
+  deliberately minimal: it captures the left-hand command's output and
+  feeds it as trailing argument text to the right-hand command (e.g.
+  `echo hi | write out.txt` runs `write out.txt hi`) rather than
+  providing any real stdin abstraction - no existing command reads
+  piped input as such, so this is more "works end to end for trivial
+  cases" than a general pipeline facility. No quoting is implemented,
+  so `>`/`;`/`&&`/`|` characters inside literal text (e.g. an `echo`
+  argument) are always parsed as operators.
 - [ ] Clean up `src/bootloader/stage2/main.c`'s empty `cstart_` function -
   looks unused.
 
