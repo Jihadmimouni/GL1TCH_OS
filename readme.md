@@ -36,8 +36,10 @@ they land:
   coalescing on free. A `meminfo` shell command and a boot-time
   `mem_self_test()` (prints `meminfo self-test: PASS`/`FAIL: <reason>` before
   the shell prompt) exercise it: distinct non-overlapping allocations, freed-slot
-  reuse, a clean out-of-memory failure that leaves the heap usable, and
-  neighbor coalescing. Real limits, worth being explicit about: this is a
+  reuse, a clean out-of-memory failure that leaves the heap usable, a
+  0xFFFF-sized request rejected cleanly instead of wrapping its internal
+  odd-size rounding to 0 (and silently "succeeding"), and neighbor
+  coalescing. Real limits, worth being explicit about: this is a
   *near-pointer* heap inside the kernel's single 64KB real-mode segment -
   no far pointers, no multiple segments, nothing resembling virtual memory
   or protected-mode paging (those stay open items below). It's also
@@ -47,10 +49,13 @@ they land:
   slack in the entire 64KB segment before the real call stack
   (`sp = 0xFFF0`, see `entry.asm`) would start colliding with it - nowhere
   near the 4-16KB that would otherwise be a reasonable heap size. 512 bytes
-  keeps 842 bytes of verified real margin below the stack. Growing this heap
-  meaningfully will need either shrinking an existing static buffer or
-  moving beyond the single-64KB-segment model (see the protected-mode item
-  below) - don't just bump `HEAP_SIZE` without rechecking the map.
+  of heap data plus mem.c's own code (including the self-test) keeps 540
+  bytes of verified real margin below the stack (code size counts against
+  this margin too, not just static data - there's no separate code
+  segment). Growing this heap meaningfully, or adding much more self-test
+  logic, will need either shrinking an existing static buffer or moving
+  beyond the single-64KB-segment model (see the protected-mode item below)
+  - don't just bump `HEAP_SIZE` (or add code) without rechecking the map.
 - [ ] **Program loading.** There's no way to load and run a separate binary
   from disk - every shell command is compiled straight into `kernel.bin`.
   (`tools/hello.c`'s `hello1.bin`, copied onto the floppy as `::fat`, looks

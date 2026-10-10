@@ -25,12 +25,23 @@
  * Given that reality, 512 bytes was chosen deliberately small: it's
  * enough to be a genuinely working, testable heap (the self-test
  * below exercises it with several concurrent allocations, splitting,
- * reuse and coalescing) while leaving 1348 - (512 + 2) = 834 bytes of
- * real margin below sp = 0xFFF0 for the actual call stack - most of
- * the slack that existed before this file, rather than most of it
- * being eaten by the heap. (The "+2" is g_head below.) If this is
- * ever raised, rebuild and check build/kernel.map's "Memory size"
- * against 0xFFF0 again before trusting the new margin - don't assume.
+ * reuse, a clean out-of-memory failure, and coalescing) while still
+ * leaving real margin below sp = 0xFFF0 for the actual call stack,
+ * rather than most of the existing 1348-byte slack being eaten by
+ * the heap.
+ *
+ * Note that it's not just the heap's own *data* (g_heap + the 2-byte
+ * g_head pointer) competing with that slack - this is one segment
+ * with code then data then BSS then (at a fixed address) the stack,
+ * so every byte of *code* added here (including mem_self_test()'s
+ * own logic) pushes BSS's end address up too. Last measured directly
+ * from build/kernel.map's "Memory size" after adding the 0xFFFF
+ * edge-case guard and its self-test case: total memory size 0xfdd4,
+ * leaving 0xFFF0 - 0xfdd4 = 540 bytes of real margin below the stack.
+ * If this is ever raised, or more self-test logic is added, rebuild
+ * and recheck build/kernel.map's "Memory size" against 0xFFF0 again
+ * before trusting any margin number - don't assume it from this
+ * comment, and don't assume only HEAP_SIZE itself affects it.
  */
 #define HEAP_SIZE 512U
 
@@ -81,8 +92,21 @@ void* _cdecl kmalloc(uint16_t size) {
      * following header) at an even offset. Not required for
      * correctness on x86 (unaligned access just works), but it's
      * free and avoids ever handing out an odd-sized split remainder
-     * that's one byte shy of being useful. */
+     * that's one byte shy of being useful.
+     *
+     * size == 0xFFFF is the one value this rounding can't handle:
+     * size++ would wrap a uint16_t to 0, and the first-fit loop below
+     * checks `b->size >= size`, which becomes `>= 0` - always true -
+     * so kmalloc would return a pointer while believing (and telling
+     * the caller) it satisfied a 65535-byte request, when the block
+     * handed back could be far smaller. That's a silent correctness
+     * bug, not just a missed optimization, so it's rejected up front
+     * as a clean failure instead - no heap this small could ever
+     * satisfy a request anywhere near that size anyway. */
     if (size & 1) {
+        if (size == 0xFFFF) {
+            return 0;
+        }
         size++;
     }
 
@@ -260,6 +284,27 @@ int _cdecl mem_self_test(void) {
     mem_set(p5, 0x55, 8);
     if (!pattern_intact(p5, 8, 0x55)) {
         self_test_fail("post-failure allocation is corrupted");
+        return 0;
+    }
+    kfree(p5);
+
+    /* ---- the odd-size-rounding edge case: 0xFFFF must fail cleanly,
+     * not wrap to 0 and spuriously "succeed" (see kmalloc()'s comment
+     * on size & 1). Same clean-failure shape as the oversized-request
+     * case above: returns 0, and the heap is still usable right
+     * after. ---- */
+    if (kmalloc(0xFFFF) != 0) {
+        self_test_fail("kmalloc(0xFFFF) should have failed, not wrapped");
+        return 0;
+    }
+    p5 = (uint8_t *)kmalloc(8);
+    if (p5 == 0) {
+        self_test_fail("heap unusable after a kmalloc(0xFFFF) request");
+        return 0;
+    }
+    mem_set(p5, 0x66, 8);
+    if (!pattern_intact(p5, 8, 0x66)) {
+        self_test_fail("post-0xFFFF-request allocation is corrupted");
         return 0;
     }
     kfree(p5);
