@@ -126,6 +126,141 @@ static void _cdecl cmd_rm(const char *arg) {
     }
 }
 
+/* cp/mv buffer the whole source file in this static array (there is no
+ * heap). 32KB comfortably fits the small-model 64KB data segment
+ * alongside g_fat_buf (4.5KB) and the rest of the kernel's globals, while
+ * still covering any file that fits on this project's 1.44MB floppy many
+ * times over. Files larger than this are rejected with a clear error
+ * instead of overflowing the buffer. */
+#define CP_MAX_SIZE 32768UL
+static uint8_t g_cp_buf[CP_MAX_SIZE];
+
+typedef struct {
+    uint32_t len;
+    int overflow;
+} cp_sink_ctx_t;
+
+static void _cdecl cp_sink(const uint8_t *data, uint16_t len, void *ctx) {
+    cp_sink_ctx_t *c = (cp_sink_ctx_t *)ctx;
+    uint16_t i;
+    for (i = 0; i < len; i++) {
+        if (c->len >= CP_MAX_SIZE) {
+            c->overflow = 1;
+            return;
+        }
+        g_cp_buf[c->len++] = data[i];
+    }
+}
+
+/* Shared by cp and mv: reads src fully into g_cp_buf, then (over)writes
+ * dst with that data. Returns 1 on success; on failure *err_msg is set
+ * and dst is left untouched (fat_write_file only touches disk once the
+ * whole source has been read into memory). */
+static int _cdecl do_copy(const char *src, const char *dst, const char **err_msg) {
+    fat_dirent_t entry;
+    cp_sink_ctx_t ctx;
+
+    if (!fat_find_file(src, &entry, err_msg)) {
+        return 0;
+    }
+    if (entry.size > CP_MAX_SIZE) {
+        *err_msg = "file too large to copy (max 32KB)";
+        return 0;
+    }
+
+    ctx.len = 0;
+    ctx.overflow = 0;
+    if (!fat_read_file(&entry, cp_sink, &ctx)) {
+        *err_msg = "read error";
+        return 0;
+    }
+    if (ctx.overflow) {
+        *err_msg = "file too large to copy (max 32KB)";
+        return 0;
+    }
+
+    return fat_write_file(dst, g_cp_buf, ctx.len, 0, err_msg);
+}
+
+static void _cdecl cmd_cp(const char *src, const char *dst) {
+    const char *err;
+    if (src[0] == '\0' || dst[0] == '\0') {
+        con_puts("usage: cp <src> <dst>\r\n");
+        return;
+    }
+    if (!do_copy(src, dst, &err)) {
+        con_puts("cp: ");
+        con_puts(err);
+        con_puts("\r\n");
+    }
+}
+
+static void _cdecl cmd_mv(const char *src, const char *dst) {
+    const char *err;
+    if (src[0] == '\0' || dst[0] == '\0') {
+        con_puts("usage: mv <src> <dst>\r\n");
+        return;
+    }
+    if (str_cmp(src, dst) == 0) {
+        /* Same path: nothing to do, and critically must not fall through
+         * to removing src below (that would delete the only copy). */
+        return;
+    }
+    if (!do_copy(src, dst, &err)) {
+        con_puts("mv: ");
+        con_puts(err);
+        con_puts("\r\n");
+        return;
+    }
+    if (!fat_remove(src, &err)) {
+        con_puts("mv: copied but could not remove source: ");
+        con_puts(err);
+        con_puts("\r\n");
+    }
+}
+
+/* Prints bytes as a short human-readable size (e.g. "1.4M", "512 bytes"),
+ * using only integer arithmetic (no floating point is available here). */
+static void _cdecl print_human_size(uint32_t bytes) {
+    char numbuf[12];
+    uint32_t unit;
+    char suffix;
+
+    if (bytes >= 1024UL * 1024UL) {
+        unit = 1024UL * 1024UL;
+        suffix = 'M';
+    } else if (bytes >= 1024UL) {
+        unit = 1024UL;
+        suffix = 'K';
+    } else {
+        con_print_u32(bytes, 10);
+        con_puts(" bytes");
+        return;
+    }
+
+    u32_to_str(bytes / unit, numbuf, 10);
+    con_puts(numbuf);
+    con_putc('.');
+    u32_to_str(((bytes % unit) * 10) / unit, numbuf, 10);
+    con_puts(numbuf);
+    con_putc(suffix);
+}
+
+static void _cdecl cmd_df(void) {
+    uint32_t total, free_space;
+
+    fat_get_space(&total, &free_space);
+
+    con_print_u32(total, 10);
+    con_puts(" bytes total, ");
+    con_print_u32(free_space, 10);
+    con_puts(" bytes free (");
+    print_human_size(total);
+    con_puts(" total, ");
+    print_human_size(free_space);
+    con_puts(" free)\r\n");
+}
+
 /* args is the remainder of the line after "write"/"append" (from
  * rest_after_first_token); splits it in place into a filename and the
  * text to write. */
@@ -190,6 +325,9 @@ static void _cdecl cmd_help(void) {
     con_puts("  write <f> <t>   write text to a file (overwrites it)\r\n");
     con_puts("  append <f> <t>  append text to a file\r\n");
     con_puts("  rm <f|dir>      remove a file or empty directory\r\n");
+    con_puts("  cp <src> <dst>  copy a file (max 32KB)\r\n");
+    con_puts("  mv <src> <dst>  move/rename a file\r\n");
+    con_puts("  df              show filesystem space usage\r\n");
     con_puts("  calc <expr>     evaluate an arithmetic expression\r\n");
     con_puts("  echo <text>     print text back\r\n");
     con_puts("  clear           clear the screen\r\n");
@@ -280,6 +418,12 @@ void _cdecl shell_run(void) {
             cmd_touch(argc > 1 ? argv[1] : "");
         } else if (str_cmp(argv[0], "rm") == 0) {
             cmd_rm(argc > 1 ? argv[1] : "");
+        } else if (str_cmp(argv[0], "cp") == 0) {
+            cmd_cp(argc > 1 ? argv[1] : "", argc > 2 ? argv[2] : "");
+        } else if (str_cmp(argv[0], "mv") == 0) {
+            cmd_mv(argc > 1 ? argv[1] : "", argc > 2 ? argv[2] : "");
+        } else if (str_cmp(argv[0], "df") == 0) {
+            cmd_df();
         } else if (str_cmp(argv[0], "write") == 0) {
             cmd_write_or_append(rest_after_first_token(raw), 0);
         } else if (str_cmp(argv[0], "append") == 0) {

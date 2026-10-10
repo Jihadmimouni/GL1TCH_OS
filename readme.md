@@ -52,7 +52,7 @@ they land:
   table support, so it can't boot off a hard disk or USB image.
 
 **Smaller / non-blocking polish:**
-- [ ] `cp` / `mv` / `df`-equivalent shell commands.
+- [x] `cp` / `mv` / `df`-equivalent shell commands.
 - [ ] Long filenames (currently 8.3 only) and real timestamps on
   `mkdir`/`touch`/`write` - new FAT entries are written with zeroed dates.
 - [ ] Shell scripting - no `&&`, `;`, piping, or redirection; one command per
