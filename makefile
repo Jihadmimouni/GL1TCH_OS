@@ -23,7 +23,7 @@ $(BUILD_DIR)/main_floppy.img: files
 	dd if=$(BUILD_DIR)/stage1.bin of=$(BUILD_DIR)/main_floppy.img conv=notrunc
 	mcopy -i $(BUILD_DIR)/main_floppy.img $(BUILD_DIR)/stage2.bin "::stage2.bin"
 	mcopy -i $(BUILD_DIR)/main_floppy.img $(BUILD_DIR)/kernel.bin "::kernel.bin"
-	mcopy -i $(BUILD_DIR)/main_floppy.img $(BUILD_DIR)/hello1.bin "::fat"
+	mcopy -i $(BUILD_DIR)/main_floppy.img $(BUILD_DIR)/hello_rm.bin "::HELLO.BIN"
 
 #
 # Bootloader

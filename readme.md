@@ -56,10 +56,40 @@ they land:
   logic, will need either shrinking an existing static buffer or moving
   beyond the single-64KB-segment model (see the protected-mode item below)
   - don't just bump `HEAP_SIZE` (or add code) without rechecking the map.
-- [ ] **Program loading.** There's no way to load and run a separate binary
-  from disk - every shell command is compiled straight into `kernel.bin`.
-  (`tools/hello.c`'s `hello1.bin`, copied onto the floppy as `::fat`, looks
-  like a leftover test artifact rather than an actual loader path.)
+- [x] **Program loading.** `src/kernel/program.c`/`program.h` add
+  `program_run(path, &err_msg)`, wired up as the shell's `run <path>`
+  command: it looks up `path` via `fat_find_file()`, streams the file
+  into a fixed, fresh segment (`0x6000`, physical 384KB - well clear of
+  the kernel's own segment at `0x4000` and the bootloader's old segment
+  at `0x2000`) via `fat_read_file()` and a new `x86_far_copy()` helper,
+  then transfers control via a new `x86_call_far()` trampoline (both in
+  `src/kernel/x86.asm`). `tools/hello_rm.asm` (assembled with
+  `nasm -f bin`, copied onto the floppy as `::HELLO.BIN`) is a real
+  worked example, replacing the old `tools/hello.c`/`hello1.bin`, which
+  was a native Linux ELF binary that could never actually run on this
+  real-mode OS - a leftover test artifact, not a real loader path.
+  The ABI is intentionally narrow: the loaded program is a flat
+  real-mode binary entered via a genuine far call to
+  `<load segment>:0000`; `cs`/`ip` come from the call itself, `ds`/`es`
+  start out as whatever the kernel had (its own segment) so the
+  program's first instructions must point them at its own segment via
+  `cs` (mirroring `entry.asm`); `ss`/`sp` are *never* switched - the
+  program runs on the kernel's own existing stack for its entire
+  lifetime, which is what sidesteps the classic real-mode trap of a
+  stack-switching callee needing to perfectly restore `ss:sp` before
+  `retf` - and the program returns with a plain `retf`, after which
+  `x86_call_far()` unconditionally restores the kernel's `ds`/`es`
+  regardless of what the program did to them (with defense-in-depth
+  `sp` re-pinning too, in case a buggy program violates the no-stack-
+  switching rule). The program talks to hardware directly via BIOS
+  (`int 10h`, etc.), exactly like the kernel itself, rather than calling
+  back into any kernel C function. What this is *not*: a real process
+  model. One program loads and runs synchronously at a time (the shell
+  blocks until it returns); there's no memory protection or isolation
+  between the kernel and a loaded program (real mode has none to offer
+  - a loaded program is exactly as trusted as the kernel); no argument
+  passing; and a hard 63KB size cap (`PROGRAM_MAX_SIZE` in program.c)
+  on the loaded file.
 - [ ] **Interrupt-driven timer and keyboard.** `read_line` blocks on a BIOS
   `int 16h` poll; there's no IRQ0 timer tick and no custom IDT, so there's no
   `sleep`, no preemption, and nothing can happen while waiting on a keypress.

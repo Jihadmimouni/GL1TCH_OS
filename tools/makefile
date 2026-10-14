@@ -1,6 +1,7 @@
 cc?=gcc
+ASM?=nasm
 BUILD_DIR?=build
-CC16?=/usr/bin/watcom/binl64/wcc 
+CC16?=/usr/bin/watcom/binl64/wcc
 LD16?=/usr/bin/watcom/binl64/wlink
 
 .PHONY: all build clean always
@@ -8,7 +9,7 @@ LD16?=/usr/bin/watcom/binl64/wlink
 all: build
 
 build: always
-	$(cc) -o $(BUILD_DIR)/hello1.bin hello.c
+	$(ASM) -f bin -o $(BUILD_DIR)/hello_rm.bin hello_rm.asm
 	$(cc) -o $(BUILD_DIR)/fat.bin fat/fat.c
 
 always:

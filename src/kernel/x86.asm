@@ -164,6 +164,110 @@ _x86_disk_io:
     ret
 
 ;
+; void _cdecl x86_far_copy(uint16_t dst_seg, uint16_t dst_off, const void *src, uint16_t len);
+; Copies len bytes from the kernel's own near pointer src (relative to
+; the caller's current ds - always true when called from kernel C code,
+; since the whole kernel lives in one 64KB segment) to dst_seg:dst_off.
+; Standard real-mode technique: point es:di at the destination, leave
+; ds:si pointing at the source (ds is already correct and is never
+; touched), and let rep movsb do the copy - source segment defaults to
+; ds, destination to es. es is saved/restored; si/di/cx are caller-saved
+; scratch under this kernel's convention (see x86_disk_io above, which
+; only saves the registers it doesn't already clobber as return values)
+; and are not restored.
+;
+global _x86_far_copy
+_x86_far_copy:
+    push bp
+    mov bp, sp
+    push si
+    push di
+    push es
+
+    mov es, [bp + 4]                    ; dst_seg
+    mov di, [bp + 6]                    ; dst_off
+    mov si, [bp + 8]                    ; src (near; ds:src)
+    mov cx, [bp + 10]                   ; len
+    cld
+    rep movsb
+
+    pop es
+    pop di
+    pop si
+    mov sp, bp
+    pop bp
+    ret
+
+;
+; void _cdecl x86_call_far(uint16_t segment);
+;
+; The kernel-side trampoline for program loading (see program.h/program.c
+; for the loader that calls this). Transfers control to a loaded program
+; at segment:0000 via a genuine far call - so the program's own retf
+; returns control right here - then UNCONDITIONALLY restores ds/es to
+; the kernel's own values afterward, no matter what the program did to
+; them. This is the single most safety-critical function in the whole
+; loader: every other kernel function assumes ds never moves out from
+; under it, and this is the one place that intentionally changes it.
+;
+; Full ABI contract with the loaded program:
+;   - On entry, cs:ip = segment:0000 (set by the far call below) and
+;     ds/es = whatever the kernel had (its own segment) at the moment
+;     of the call. The program's very first instructions must set its
+;     own ds/es from cs before touching any of its own data (mirroring
+;     what entry.asm does for the kernel itself).
+;   - ss/sp are NOT switched here, and the loaded program must NEVER
+;     touch them - it runs on the kernel's existing stack for its
+;     entire lifetime. This is what sidesteps the classic real-mode
+;     trap of a callee switching ss:sp and needing to restore them
+;     perfectly before retf: by simply forbidding stack switches in
+;     this ABI, that whole failure class can't happen (assuming the
+;     program obeys the contract).
+;   - The program returns with a plain retf.
+;
+; Because segment is a runtime value (not a link-time constant), the
+; far-call target can't be written as a literal `call far seg:0` -
+; instead a far pointer (offset word, then segment word - x86's
+; standard in-memory far-pointer layout) is built in a small stack
+; scratch slot and called indirectly via `call far [mem]`.
+;
+; Defense in depth: even though the ABI forbids the guest from touching
+; sp, this also snapshots sp into cx immediately before the far call and
+; forcibly re-pins sp to that value immediately after it returns, before
+; anything else is popped. In the well-behaved case this is a no-op
+; (call far's return address push/pop is self-balancing, so sp is back
+; to the same value anyway); if a buggy or malicious guest left the
+; stack unbalanced, this stops that corruption from propagating into the
+; ds/es restore below (or into the caller's own stack frame).
+;
+global _x86_call_far
+_x86_call_far:
+    push bp
+    mov bp, sp
+    push ds                              ; saved ds at [bp - 2]
+    push es                              ; saved es at [bp - 4]
+    sub sp, 4                            ; far-ptr scratch at [bp - 8]/[bp - 6]
+
+    mov word [bp - 8], 0                 ; far ptr offset = 0 (program entry point)
+    mov ax, [bp + 4]                     ; segment argument
+    mov word [bp - 6], ax                ; far ptr segment
+
+    mov cx, sp                           ; snapshot sp = bp - 8, taken right before
+                                          ; the far call (see comment above)
+    call far [bp - 8]                    ; transfer control to segment:0000; control
+                                          ; returns here via the program's retf
+
+    mov sp, cx                           ; force sp back to its pre-call value,
+                                          ; regardless of what the guest did
+    add sp, 4                            ; drop the far-ptr scratch slot
+    pop es                               ; restore the kernel's own es
+    pop ds                               ; restore the kernel's own ds
+
+    mov sp, bp
+    pop bp
+    ret
+
+;
 ; void _cdecl x86_get_datetime(uint16_t *fat_date, uint16_t *fat_time);
 ; Reads the current date/time from the BIOS real-time clock (int 1Ah,
 ; AH=02h for time, AH=04h for date; both return packed BCD) and packs

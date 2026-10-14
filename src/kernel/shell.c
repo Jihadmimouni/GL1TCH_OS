@@ -5,6 +5,7 @@
 #include "calc.h"
 #include "fat.h"
 #include "mem.h"
+#include "program.h"
 #include "x86.h"
 
 /* Bumped from 128 so a few chained commands (";"/"&&") still fit on one
@@ -395,6 +396,27 @@ static void _cdecl cmd_write_or_append(char *args, int append) {
     }
 }
 
+/* Loads and runs a flat real-mode binary via program_run() (see
+ * program.h for the full ABI). A successful run (program_run()
+ * returning 1) is a successful shell command regardless of what the
+ * loaded program itself printed or did - only load/run failures (not
+ * found, not a file, too large, disk error) fail this command. */
+static void _cdecl cmd_run(const char *arg) {
+    const char *err;
+
+    if (arg[0] == '\0') {
+        con_puts("usage: run <path>\r\n");
+        g_last_cmd_failed = 1;
+        return;
+    }
+    if (!program_run(arg, &err)) {
+        con_puts("run: ");
+        con_puts(err);
+        con_puts("\r\n");
+        g_last_cmd_failed = 1;
+    }
+}
+
 static void _cdecl cmd_calc(const char *arg) {
     int32_t result;
     const char *err;
@@ -431,6 +453,7 @@ static void _cdecl cmd_help(void) {
     con_puts("  mv <src> <dst>  move/rename a file\r\n");
     con_puts("  df              show filesystem space usage\r\n");
     con_puts("  meminfo         show kernel heap usage\r\n");
+    con_puts("  run <path>      load and run a flat real-mode binary (max 63KB)\r\n");
     con_puts("  calc <expr>     evaluate an arithmetic expression\r\n");
     con_puts("  echo <text>     print text back\r\n");
     con_puts("  clear           clear the screen\r\n");
@@ -529,6 +552,8 @@ static void _cdecl dispatch(char *tokline, char *raw) {
         cmd_df();
     } else if (str_cmp(argv[0], "meminfo") == 0) {
         cmd_meminfo();
+    } else if (str_cmp(argv[0], "run") == 0) {
+        cmd_run(argc > 1 ? argv[1] : "");
     } else if (str_cmp(argv[0], "write") == 0) {
         cmd_write_or_append(rest_after_first_token(raw), 0);
     } else if (str_cmp(argv[0], "append") == 0) {
