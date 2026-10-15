@@ -206,13 +206,21 @@ static void _cdecl cmd_rm(const char *arg) {
     }
 }
 
-/* cp/mv buffer the whole source file in this static array (there is no
- * heap). 32KB comfortably fits the small-model 64KB data segment
- * alongside g_fat_buf (4.5KB) and the rest of the kernel's globals, while
- * still covering any file that fits on this project's 1.44MB floppy many
- * times over. Files larger than this are rejected with a clear error
- * instead of overflowing the buffer. */
-#define CP_MAX_SIZE 32768UL
+/* cp/mv buffer the whole source file in this static array. This kernel
+ * is one single 64KB real-mode segment shared by all code, data, the
+ * heap (mem.c) and the call stack (entry.asm's sp = 0xFFF0) - there is
+ * no room here for a generous guess. This was originally 32KB, sized
+ * only against what shell.c itself needed; once mem.c's heap and then
+ * program.c's loader were added on top, the kernel's total linked size
+ * overflowed the 64KB segment entirely (confirmed via build/kernel.map:
+ * "Memory size" exceeded both 0x10000 and sp's 0xFFF0 start address -
+ * past 0xFFFF wraps around and overwrites the start of the kernel's own
+ * code). 16KB still covers any realistically-sized file on this
+ * project's floppy; files larger than this are rejected with a clear
+ * error instead of overflowing the buffer. If kernel code grows again,
+ * re-check build/kernel.map's "Memory size" against 0xFFF0 before
+ * assuming this (or mem.c's heap) is still safe - don't just assume. */
+#define CP_MAX_SIZE 16384UL
 static uint8_t g_cp_buf[CP_MAX_SIZE];
 
 typedef struct {
@@ -244,7 +252,7 @@ static int _cdecl do_copy(const char *src, const char *dst, const char **err_msg
         return 0;
     }
     if (entry.size > CP_MAX_SIZE) {
-        *err_msg = "file too large to copy (max 32KB)";
+        *err_msg = "file too large to copy (max 16KB)";
         return 0;
     }
 
@@ -255,7 +263,7 @@ static int _cdecl do_copy(const char *src, const char *dst, const char **err_msg
         return 0;
     }
     if (ctx.overflow) {
-        *err_msg = "file too large to copy (max 32KB)";
+        *err_msg = "file too large to copy (max 16KB)";
         return 0;
     }
 
@@ -449,7 +457,7 @@ static void _cdecl cmd_help(void) {
     con_puts("  write <f> <t>   write text to a file (overwrites it)\r\n");
     con_puts("  append <f> <t>  append text to a file\r\n");
     con_puts("  rm <f|dir>      remove a file or empty directory\r\n");
-    con_puts("  cp <src> <dst>  copy a file (max 32KB)\r\n");
+    con_puts("  cp <src> <dst>  copy a file (max 16KB)\r\n");
     con_puts("  mv <src> <dst>  move/rename a file\r\n");
     con_puts("  df              show filesystem space usage\r\n");
     con_puts("  meminfo         show kernel heap usage\r\n");
